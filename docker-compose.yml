@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: secure-db-manager-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      TZ: UTC
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - security-network
+
+  # migrator:
+  #   image: ghcr.io/kukymbr/goose-docker:latest
+  #   container_name: security-db-migrator
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./db/migration:/migrations
+  #   environment:
+  #     GOOSE_DRIVER: postgres
+  #     GOOSE_DBSTRING: "host=db port=5432 user=postgres password=postgres dbname=security_db sslmode=disable"
+  #   networks:
+  #     - security-network
+  #   restart: on-failure
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  security-network:
+    driver: bridge

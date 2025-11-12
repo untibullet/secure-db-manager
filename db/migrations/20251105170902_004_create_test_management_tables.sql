@@ -27,6 +27,7 @@ CREATE INDEX idx_testplans_status ON test_plans(status);
 -- Таблица автотестов
 CREATE TABLE autotests (
     autotest_id SERIAL PRIMARY KEY,
+    test_case_id INT NOT NULL,
     name VARCHAR(200) NOT NULL UNIQUE,
     description TEXT NULL,
     owner_user_id INT NOT NULL,
@@ -62,7 +63,6 @@ CREATE TABLE test_cases (
     priority_id INT NOT NULL,
     name VARCHAR(200) NOT NULL UNIQUE,
     description TEXT NULL,
-    executor_user_id INT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NULL,
     owner_user_id INT NOT NULL,
@@ -72,11 +72,9 @@ CREATE TABLE test_cases (
 );
 
 COMMENT ON TABLE test_cases IS 'Тестовые случаи (ручные и автоматизированные)';
-COMMENT ON COLUMN test_cases.executor_user_id IS 'Назначенный исполнитель тест-кейса';
 
 CREATE INDEX idx_testcases_priority ON test_cases(priority_id);
 CREATE INDEX idx_testcases_owner ON test_cases(owner_user_id);
-CREATE INDEX idx_testcases_executor ON test_cases(executor_user_id) WHERE executor_user_id IS NOT NULL;
 CREATE INDEX idx_testcases_automated ON test_cases(is_automated) WHERE is_automated = TRUE;
 CREATE INDEX idx_testcases_active ON test_cases(is_active) WHERE is_active = TRUE;
 
