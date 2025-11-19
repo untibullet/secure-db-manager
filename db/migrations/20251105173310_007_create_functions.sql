@@ -9,53 +9,156 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Функция аудита для критических таблиц
-CREATE OR REPLACE FUNCTION audit_trigger_function()
+-- Функции аудита критических таблиц
+-- users
+CREATE OR REPLACE FUNCTION audit_users()
 RETURNS TRIGGER AS $$
 DECLARE
-    user_id_value INT;
+    v_user_id INT;
 BEGIN
-    -- Попытка получить user_id из настроек сессии
+    -- текущий пользователь приложения (можно прокидывать из бекенда через GUC)
     BEGIN
-        user_id_value := current_setting('app.current_user_id', true)::INT;
+        v_user_id := current_setting('app.current_user_id', true)::INT;
     EXCEPTION WHEN OTHERS THEN
-        user_id_value := NULL;
+        v_user_id := NULL;
     END;
 
     IF TG_OP = 'INSERT' THEN
-        INSERT INTO audit_log (table_name, operation, record_id, user_id, new_values)
-        VALUES (TG_TABLE_NAME, TG_OP, 
-                CASE TG_TABLE_NAME
-                    WHEN 'users' THEN NEW.user_id
-                    WHEN 'test_cases' THEN NEW.test_case_id
-                    WHEN 'test_plans' THEN NEW.test_plan_id
-                    ELSE 0
-                END,
-                user_id_value, row_to_json(NEW)::JSONB);
+        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
+        VALUES ('users', 'INSERT', NEW.user_id, v_user_id, NULL, to_jsonb(NEW), inet_client_addr());
         RETURN NEW;
+
     ELSIF TG_OP = 'UPDATE' THEN
-        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values)
-        VALUES (TG_TABLE_NAME, TG_OP,
-                CASE TG_TABLE_NAME
-                    WHEN 'users' THEN NEW.user_id
-                    WHEN 'test_cases' THEN NEW.test_case_id
-                    WHEN 'test_plans' THEN NEW.test_plan_id
-                    ELSE 0
-                END,
-                user_id_value, row_to_json(OLD)::JSONB, row_to_json(NEW)::JSONB);
+        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
+        VALUES ('users', 'UPDATE', NEW.user_id, v_user_id, to_jsonb(OLD), to_jsonb(NEW), inet_client_addr());
         RETURN NEW;
+
     ELSIF TG_OP = 'DELETE' THEN
-        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values)
-        VALUES (TG_TABLE_NAME, TG_OP,
-                CASE TG_TABLE_NAME
-                    WHEN 'users' THEN OLD.user_id
-                    WHEN 'test_cases' THEN OLD.test_case_id
-                    WHEN 'test_plans' THEN OLD.test_plan_id
-                    ELSE 0
-                END,
-                user_id_value, row_to_json(OLD)::JSONB);
+        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
+        VALUES ('users', 'DELETE', OLD.user_id, v_user_id, to_jsonb(OLD), NULL, inet_client_addr());
         RETURN OLD;
     END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- user_roles
+CREATE OR REPLACE FUNCTION audit_user_roles()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_user_id INT;
+BEGIN
+    BEGIN
+        v_user_id := current_setting('app.current_user_id', true)::INT;
+    EXCEPTION WHEN OTHERS THEN
+        v_user_id := NULL;
+    END;
+
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
+        VALUES (
+            'user_roles',
+            'INSERT',
+            NEW.user_id,               -- можно считать ключом пользователя
+            v_user_id,
+            NULL,
+            to_jsonb(NEW),
+            inet_client_addr()
+        );
+        RETURN NEW;
+
+    ELSIF TG_OP = 'UPDATE' THEN
+        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
+        VALUES (
+            'user_roles',
+            'UPDATE',
+            NEW.user_id,
+            v_user_id,
+            to_jsonb(OLD),
+            to_jsonb(NEW),
+            inet_client_addr()
+        );
+        RETURN NEW;
+
+    ELSIF TG_OP = 'DELETE' THEN
+        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
+        VALUES (
+            'user_roles',
+            'DELETE',
+            OLD.user_id,
+            v_user_id,
+            to_jsonb(OLD),
+            NULL,
+            inet_client_addr()
+        );
+        RETURN OLD;
+    END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- test_cases
+CREATE OR REPLACE FUNCTION audit_test_cases()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_user_id INT;
+BEGIN
+    BEGIN
+        v_user_id := current_setting('app.current_user_id', true)::INT;
+    EXCEPTION WHEN OTHERS THEN
+        v_user_id := NULL;
+    END;
+
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
+        VALUES ('test_cases', 'INSERT', NEW.test_case_id, v_user_id, NULL, to_jsonb(NEW), inet_client_addr());
+        RETURN NEW;
+
+    ELSIF TG_OP = 'UPDATE' THEN
+        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
+        VALUES ('test_cases', 'UPDATE', NEW.test_case_id, v_user_id, to_jsonb(OLD), to_jsonb(NEW), inet_client_addr());
+        RETURN NEW;
+
+    ELSIF TG_OP = 'DELETE' THEN
+        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
+        VALUES ('test_cases', 'DELETE', OLD.test_case_id, v_user_id, to_jsonb(OLD), NULL, inet_client_addr());
+        RETURN OLD;
+    END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- test_plans
+CREATE OR REPLACE FUNCTION audit_test_plans()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_user_id INT;
+BEGIN
+    BEGIN
+        v_user_id := current_setting('app.current_user_id', true)::INT;
+    EXCEPTION WHEN OTHERS THEN
+        v_user_id := NULL;
+    END;
+
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
+        VALUES ('test_plans', 'INSERT', NEW.test_plan_id, v_user_id, NULL, to_jsonb(NEW), inet_client_addr());
+        RETURN NEW;
+
+    ELSIF TG_OP = 'UPDATE' THEN
+        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
+        VALUES ('test_plans', 'UPDATE', NEW.test_plan_id, v_user_id, to_jsonb(OLD), to_jsonb(NEW), inet_client_addr());
+        RETURN NEW;
+
+    ELSIF TG_OP = 'DELETE' THEN
+        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
+        VALUES ('test_plans', 'DELETE', OLD.test_plan_id, v_user_id, to_jsonb(OLD), NULL, inet_client_addr());
+        RETURN OLD;
+    END IF;
+
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
@@ -64,7 +167,8 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION lock_user_account()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF NEW.failed_login_attempts >= 5 THEN
+    IF NEW.failed_login_attempts > OLD.failed_login_attempts
+       AND NEW.failed_login_attempts >= 5 THEN
         NEW.account_locked_until = CURRENT_TIMESTAMP + INTERVAL '30 minutes';
     END IF;
     RETURN NEW;
@@ -72,66 +176,45 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_lock_user_account
-    BEFORE UPDATE OF failed_login_attempts ON users
-    FOR EACH ROW EXECUTE FUNCTION lock_user_account();
-
--- Функция для проверки сложности пароля
-CREATE OR REPLACE FUNCTION check_password_complexity(password TEXT)
-RETURNS BOOLEAN AS $$
-BEGIN
-    IF LENGTH(password) < 12 THEN RETURN FALSE; END IF;
-    IF password !~ '[A-Z]' THEN RETURN FALSE; END IF;
-    IF password !~ '[a-z]' THEN RETURN FALSE; END IF;
-    IF password !~ '[0-9]' THEN RETURN FALSE; END IF;
-    IF password !~ '[!@#$%^&*()_+\-=\[\]{};:''",.<>?/|\\]' THEN RETURN FALSE; END IF;
-    RETURN TRUE;
-END;
-$$ LANGUAGE plpgsql;
-
--- Функция для проверки истечения срока пароля
-CREATE OR REPLACE FUNCTION check_password_expiration()
-RETURNS TABLE(user_id INT, username VARCHAR, days_until_expiration INT) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        u.user_id,
-        u.username,
-        90 - EXTRACT(DAY FROM CURRENT_TIMESTAMP - u.password_changed_at)::INT AS days_until_expiration
-    FROM users u
-    WHERE u.is_active = TRUE
-    AND CURRENT_TIMESTAMP - u.password_changed_at > INTERVAL '90 days';
-END;
-$$ LANGUAGE plpgsql;
+BEFORE UPDATE OF failed_login_attempts ON users
+FOR EACH ROW
+WHEN (OLD.failed_login_attempts IS DISTINCT FROM NEW.failed_login_attempts)
+EXECUTE FUNCTION lock_user_account();
 
 -- Функция для просмотра активных сессий пользователей
 CREATE OR REPLACE FUNCTION get_active_sessions()
 RETURNS TABLE(
-    pid INT,
-    username TEXT,
-    database TEXT,
-    client_addr TEXT,
+    pid             INT,
+    username        TEXT,
+    database        TEXT,
+    client_addr     TEXT,
     application_name TEXT,
-    state TEXT,
-    query_start TIMESTAMPTZ,
-    state_change TIMESTAMPTZ
+    state           TEXT,
+    query_start     TIMESTAMPTZ,
+    state_change    TIMESTAMPTZ
 ) AS $$
 BEGIN
+    -- Защита от подмены search_path
+    PERFORM set_config('search_path', 'pg_catalog,public', true);
+
     RETURN QUERY
-    SELECT 
-        pg_stat_activity.pid,
-        pg_stat_activity.usename::TEXT,
-        pg_stat_activity.datname::TEXT,
-        COALESCE(pg_stat_activity.client_addr::TEXT, 'localhost'),
-        pg_stat_activity.application_name::TEXT,
-        pg_stat_activity.state::TEXT,
-        pg_stat_activity.query_start,
-        pg_stat_activity.state_change
-    FROM pg_stat_activity
-    WHERE pg_stat_activity.datname = current_database()
-    AND pg_stat_activity.pid <> pg_backend_pid()
-    ORDER BY pg_stat_activity.query_start DESC;
+    SELECT
+        a.pid,
+        a.usename::TEXT,
+        a.datname::TEXT,
+        COALESCE(a.client_addr::TEXT, 'localhost'),
+        a.application_name::TEXT,
+        a.state::TEXT,
+        a.query_start,
+        a.state_change
+    FROM pg_catalog.pg_stat_activity AS a
+    WHERE a.datname = current_database()
+      AND a.pid <> pg_backend_pid()
+    ORDER BY a.query_start DESC;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 COMMENT ON FUNCTION get_active_sessions() IS 'Просмотр активных подключений к БД';
 -- +goose StatementEnd
@@ -139,14 +222,8 @@ COMMENT ON FUNCTION get_active_sessions() IS 'Просмотр активных 
 -- +goose Down
 -- +goose StatementBegin
 DROP FUNCTION IF EXISTS update_updated_at_column();
-
 DROP FUNCTION IF EXISTS audit_trigger_function();
-
+DROP TRIGGER IF EXISTS trg_lock_user_account ON users;
 DROP FUNCTION IF EXISTS lock_user_account();
-
-DROP FUNCTION IF EXISTS check_password_complexity(TEXT);
-
-DROP FUNCTION IF EXISTS check_password_expiration(INT);
-
 DROP FUNCTION IF EXISTS get_active_sessions();
 -- +goose StatementEnd

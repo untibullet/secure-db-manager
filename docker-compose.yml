@@ -23,6 +23,23 @@ services:
       start_period: 10s
     networks:
       - security-network
+  
+  pgadmin:
+    image: dpage/pgadmin4:8.10
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@localhost.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'  # Включает режим локального использования
+    ports:
+      - "5050:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - security-network
 
   # migrator:
   #   image: ghcr.io/kukymbr/goose-docker:latest
@@ -42,6 +59,7 @@ services:
 volumes:
   postgres_data:
     driver: local
+  pgadmin-data:
 
 networks:
   security-network:
