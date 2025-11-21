@@ -23,6 +23,11 @@ BEGIN
         CREATE ROLE db_tester WITH NOLOGIN;
     END IF;
 
+    -- Роль Разработчика
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'db_developer') THEN
+        CREATE ROLE db_developer WITH NOLOGIN;
+    END IF;
+
     -- Роль CI/CD системы (технический пользователь)
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'db_cicd_system') THEN
         CREATE ROLE db_cicd_system WITH NOLOGIN;
@@ -93,6 +98,26 @@ GRANT SELECT ON v_lead_all_results TO db_automation_engineer;
 GRANT SELECT ON v_shared_reports TO db_automation_engineer;
 
 
+-- === Роль: Developer (НОВОЕ) ===
+-- Разработчик должен видеть планы релизов
+GRANT SELECT ON v_public_test_plans TO db_developer;
+
+-- Разработчику нужно видеть детали тест-кейсов (как воспроизвести баг)
+GRANT SELECT ON v_lead_all_cases TO db_developer;
+
+-- Разработчик может изучать код автотестов
+GRANT SELECT ON v_engineer_autotests TO db_developer;
+
+-- Разработчик видит все результаты тестов (что упало, где ошибки)
+GRANT SELECT ON v_lead_all_results TO db_developer;
+
+-- Разработчик видит отчеты о качестве
+GRANT SELECT ON v_shared_reports TO db_developer;
+
+-- Разработчик видит статистику по запускам (где чаще всего падает)
+GRANT SELECT ON v_test_execution_summary TO db_developer;
+
+
 -- === Роль: Guest ===
 -- Только чтение публичных данных
 GRANT SELECT ON v_public_test_plans TO db_guest;
@@ -111,10 +136,14 @@ GRANT SELECT, INSERT, UPDATE ON v_active_test_runs TO db_cicd_system;
 -- +goose Down
 -- +goose StatementBegin
 -- Отзыв прав (каскадно удалит права у наследуемых пользователей)
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM db_admin, db_developer, db_test_lead, db_automation_engineer, db_tester, db_cicd_system, db_guest;
+REVOKE USAGE ON SCHEMA public FROM db_admin, db_developer, db_test_lead, db_automation_engineer, db_tester, db_cicd_system, db_guest;
+
 DROP ROLE IF EXISTS db_guest;
 DROP ROLE IF EXISTS db_cicd_system;
 DROP ROLE IF EXISTS db_tester;
 DROP ROLE IF EXISTS db_automation_engineer;
 DROP ROLE IF EXISTS db_test_lead;
+DROP ROLE IF EXISTS db_developer;
 DROP ROLE IF EXISTS db_admin;
 -- +goose StatementEnd
