@@ -27,13 +27,11 @@ SELECT
     tc.description,
     tc.is_automated,
     p.name AS priority,
-    u_owner.full_name AS owner,
-    u_executor.username AS executor_username
+    u_owner.full_name AS owner
 FROM test_cases tc
 JOIN priorities p ON tc.priority_id = p.priority_id
 JOIN users u_owner ON tc.owner_user_id = u_owner.user_id
-JOIN users u_executor ON tc.executor_user_id = u_executor.user_id
-WHERE u_executor.username = CURRENT_USER
+WHERE u_owner.username = CURRENT_USER
 AND tc.is_active = TRUE;
 
 COMMENT ON VIEW v_tester_assigned_cases IS 'Тест-кейсы, назначенные текущему пользователю (RLS)';
@@ -47,12 +45,10 @@ SELECT
     tc.is_automated,
     tc.is_active,
     p.name AS priority,
-    u_owner.full_name AS owner,
-    COALESCE(u_executor.full_name, 'Не назначен') AS executor
+    u_owner.full_name AS owner
 FROM test_cases tc
 JOIN priorities p ON tc.priority_id = p.priority_id
-JOIN users u_owner ON tc.owner_user_id = u_owner.user_id
-LEFT JOIN users u_executor ON tc.executor_user_id = u_executor.user_id;
+JOIN users u_owner ON tc.owner_user_id = u_owner.user_id;
 
 COMMENT ON VIEW v_lead_all_cases IS 'Все тест-кейсы (доступ: Test_Lead, Automation_Engineer)';
 
@@ -276,7 +272,6 @@ GROUP BY trun.test_run_id, trun.name, tp.name, av.version_string,
 
 COMMENT ON VIEW v_test_execution_summary IS 'Сводка выполнения тестов по прогонам';
 -- +goose StatementEnd
-
 
 -- +goose Down
 -- +goose StatementBegin
