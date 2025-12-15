@@ -51,6 +51,12 @@ GRANT USAGE ON SCHEMA public TO db_admin, db_test_lead, db_automation_engineer, 
 -- Полный доступ к управлению пользователями
 GRANT SELECT, INSERT, UPDATE, DELETE ON v_admin_users_and_roles TO db_admin;
 
+GRANT db_tester TO db_admin WITH ADMIN OPTION;
+GRANT db_test_lead TO db_admin WITH ADMIN OPTION;
+GRANT db_automation_engineer TO db_admin WITH ADMIN OPTION;
+GRANT db_developer TO db_admin WITH ADMIN OPTION;
+GRANT db_guest TO db_admin WITH ADMIN OPTION;
+
 
 -- === Роль: Test_Lead ===
 -- Управление тест-планами (CRUD)

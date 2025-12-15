@@ -1,10 +1,12 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Paging определяет параметры пагинации
@@ -16,13 +18,20 @@ type Paging struct {
 // Filter - карта фильтров (ключ: колонка, значение: значение)
 type Filter map[string]interface{}
 
-// Repository - основная структура слоя данных
-type Repository struct {
-	pool *pgxpool.Pool
+type DBTX interface {
+	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, arguments ...interface{}) pgx.Row
+	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
-func NewRepository(pool *pgxpool.Pool) *Repository {
-	return &Repository{pool: pool}
+// Repository - основная структура слоя данных
+type Repository struct {
+	db DBTX // Интерфейс, скрывающий *pgx.Conn, *pgxpool.Pool или pgx.Tx
+}
+
+func NewRepository(db DBTX) *Repository {
+	return &Repository{db: db}
 }
 
 // Вспомогательная функция для построения WHERE и аргументов

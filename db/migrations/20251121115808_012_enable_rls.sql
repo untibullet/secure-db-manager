@@ -134,13 +134,14 @@ DROP POLICY IF EXISTS users_select_all_staff ON users;
 
 DROP POLICY IF EXISTS testcases_select_active ON test_cases;
 DROP POLICY IF EXISTS testcases_all_staff ON test_cases;
-DROP POLICY IF EXISTS testcases_update_assigned ON test_cases;
+DROP POLICY IF EXISTS testcases_update_own ON test_cases;
 
 DROP POLICY IF EXISTS testresults_all_staff ON test_results;
 DROP POLICY IF EXISTS testresults_select_own ON test_results;
 DROP POLICY IF EXISTS testresults_insert_own ON test_results;
 DROP POLICY IF EXISTS testresults_update_own ON test_results;
 DROP POLICY IF EXISTS testresults_select_public ON test_results;
+DROP POLICY IF EXISTS testresults_select_staff ON test_results;
 
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE test_cases DISABLE ROW LEVEL SECURITY;

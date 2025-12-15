@@ -7,7 +7,7 @@ func (r *Repository) ListPublicTestPlans(ctx context.Context, filter Filter, pag
 	sql := `SELECT test_plan_id, test_plan_name, description, start_date, end_date, status, owner, priority 
             FROM v_public_test_plans` + where
 
-	rows, err := r.pool.Query(ctx, sql, args...)
+	rows, err := r.db.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +29,7 @@ func (r *Repository) ListPublicResults(ctx context.Context, filter Filter, pagin
 	sql := `SELECT test_result_id, test_run_id, test_case_name, status, execution_date 
             FROM v_public_results` + where
 	
-	rows, err := r.pool.Query(ctx, sql, args...)
+	rows, err := r.db.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (r *Repository) ListSharedEnvironments(ctx context.Context, filter Filter) 
 	sql := `SELECT env_config_id, environment_name, description, is_active, params_count 
             FROM v_shared_environments` + where
 
-	rows, err := r.pool.Query(ctx, sql, args...)
+	rows, err := r.db.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func (r *Repository) ListSharedReports(ctx context.Context, filter Filter, pagin
 	sql := `SELECT report_id, report_name, creation_date, template, author 
             FROM v_shared_reports` + where
 
-	rows, err := r.pool.Query(ctx, sql, args...)
+	rows, err := r.db.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
