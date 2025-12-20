@@ -58,7 +58,7 @@ func (r *Repository) AdminSetUserActive(ctx context.Context, userID int, isActiv
 // TODO: удалить этот метод или добавить поле lock_until
 func (r *Repository) AdminLockUntil(ctx context.Context, userID int, ts time.Time) error {
 	// В v_admin_users_and_roles нет поля lock_until явно в SELECT, но если триггер поддерживает UPDATE,
-	// или если view содержит это поле (в файле не показано, но подразумевается логикой блокировки):
+	// или если view содержит это поле:
 	sql := `UPDATE v_admin_users_and_roles SET locked_until=$1 WHERE user_id=$2`
 	_, err := r.db.Exec(ctx, sql, ts, userID)
 	return err

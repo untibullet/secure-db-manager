@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/static/styles.css">
+  <title>DB Explorer (Mock)</title>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">DB Explorer</div>
+    <div class="userbox">
+      <span id="currentUser">mock: ivan_ivanov</span>
+      <a href="/login">Выйти</a>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="tables">
+      <h3>Таблицы</h3>
+      <div id="tablesList" class="tablesList"></div>
+    </section>
+
+    <section class="content">
+      <h3 id="activeTitle">Таблица: —</h3>
+      <div id="activeTable" class="grid"></div>
+
+      <h4>Связанные таблицы</h4>
+      <div id="neighbors" class="neighbors"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
