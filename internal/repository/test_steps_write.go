@@ -23,7 +23,7 @@ func (r *Repository) DeleteTestCase(ctx context.Context, id int) error {
 }
 
 func (r *Repository) CreateTestCaseStep(ctx context.Context, tcID int, dto StepDTO) (int, error) {
-	sql := `INSERT INTO v_test_case_steps (test_case_id, step_number, action, expected_result) 
+	sql := `INSERT INTO v_test_case_steps (test_case_id, step_order, action_text, expected_result)
             VALUES ($1, $2, $3, $4) RETURNING step_id`
 	var id int
 	err := r.db.QueryRow(ctx, sql, tcID, dto.Order, dto.Action, dto.Expected).Scan(&id)

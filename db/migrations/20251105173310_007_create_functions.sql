@@ -9,45 +9,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Функции аудита критических таблиц
--- users
-CREATE OR REPLACE FUNCTION audit_users()
+-- Универсальная функция аудита (ПолИБ-6.2).
+-- Используется всеми таблицами активов A1–A7.
+-- TG_ARGV[0] — имя колонки первичного ключа таблицы (передаётся при создании триггера).
+CREATE OR REPLACE FUNCTION audit_generic()
 RETURNS TRIGGER AS $$
 DECLARE
-    v_user_id INT;
-BEGIN
-    -- текущий пользователь приложения (можно прокидывать из бекенда через GUC)
-    BEGIN
-        v_user_id := current_setting('app.current_user_id', true)::INT;
-    EXCEPTION WHEN OTHERS THEN
-        v_user_id := NULL;
-    END;
-
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
-        VALUES ('users', 'INSERT', NEW.user_id, v_user_id, NULL, to_jsonb(NEW), inet_client_addr());
-        RETURN NEW;
-
-    ELSIF TG_OP = 'UPDATE' THEN
-        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
-        VALUES ('users', 'UPDATE', NEW.user_id, v_user_id, to_jsonb(OLD), to_jsonb(NEW), inet_client_addr());
-        RETURN NEW;
-
-    ELSIF TG_OP = 'DELETE' THEN
-        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
-        VALUES ('users', 'DELETE', OLD.user_id, v_user_id, to_jsonb(OLD), NULL, inet_client_addr());
-        RETURN OLD;
-    END IF;
-
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
--- user_roles
-CREATE OR REPLACE FUNCTION audit_user_roles()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_user_id INT;
+    v_user_id   INT;
+    v_record_id INT;
 BEGIN
     BEGIN
         v_user_id := current_setting('app.current_user_id', true)::INT;
@@ -55,121 +24,41 @@ BEGIN
         v_user_id := NULL;
     END;
 
-    IF TG_OP = 'INSERT' THEN
+    IF TG_OP = 'DELETE' THEN
+        EXECUTE format('SELECT ($1).%I', TG_ARGV[0]) INTO v_record_id USING OLD;
         INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
-        VALUES (
-            'user_roles',
-            'INSERT',
-            NEW.user_id,               -- можно считать ключом пользователя
-            v_user_id,
-            NULL,
-            to_jsonb(NEW),
-            inet_client_addr()
-        );
-        RETURN NEW;
-
-    ELSIF TG_OP = 'UPDATE' THEN
-        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
-        VALUES (
-            'user_roles',
-            'UPDATE',
-            NEW.user_id,
-            v_user_id,
-            to_jsonb(OLD),
-            to_jsonb(NEW),
-            inet_client_addr()
-        );
-        RETURN NEW;
-
-    ELSIF TG_OP = 'DELETE' THEN
-        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
-        VALUES (
-            'user_roles',
-            'DELETE',
-            OLD.user_id,
-            v_user_id,
-            to_jsonb(OLD),
-            NULL,
-            inet_client_addr()
-        );
+        VALUES (TG_TABLE_NAME, TG_OP, v_record_id, v_user_id, to_jsonb(OLD), NULL, inet_client_addr());
         RETURN OLD;
+    ELSIF TG_OP = 'INSERT' THEN
+        EXECUTE format('SELECT ($1).%I', TG_ARGV[0]) INTO v_record_id USING NEW;
+        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
+        VALUES (TG_TABLE_NAME, TG_OP, v_record_id, v_user_id, NULL, to_jsonb(NEW), inet_client_addr());
+        RETURN NEW;
+    ELSE -- UPDATE
+        EXECUTE format('SELECT ($1).%I', TG_ARGV[0]) INTO v_record_id USING NEW;
+        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
+        VALUES (TG_TABLE_NAME, TG_OP, v_record_id, v_user_id, to_jsonb(OLD), to_jsonb(NEW), inet_client_addr());
+        RETURN NEW;
     END IF;
-
-    RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
--- test_cases
-CREATE OR REPLACE FUNCTION audit_test_cases()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_user_id INT;
-BEGIN
-    BEGIN
-        v_user_id := current_setting('app.current_user_id', true)::INT;
-    EXCEPTION WHEN OTHERS THEN
-        v_user_id := NULL;
-    END;
+COMMENT ON FUNCTION audit_generic() IS 'Универсальный аудит-триггер. SECURITY DEFINER позволяет INSERT в audit_log в обход RLS.';
 
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
-        VALUES ('test_cases', 'INSERT', NEW.test_case_id, v_user_id, NULL, to_jsonb(NEW), inet_client_addr());
-        RETURN NEW;
-
-    ELSIF TG_OP = 'UPDATE' THEN
-        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
-        VALUES ('test_cases', 'UPDATE', NEW.test_case_id, v_user_id, to_jsonb(OLD), to_jsonb(NEW), inet_client_addr());
-        RETURN NEW;
-
-    ELSIF TG_OP = 'DELETE' THEN
-        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
-        VALUES ('test_cases', 'DELETE', OLD.test_case_id, v_user_id, to_jsonb(OLD), NULL, inet_client_addr());
-        RETURN OLD;
-    END IF;
-
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
--- test_plans
-CREATE OR REPLACE FUNCTION audit_test_plans()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_user_id INT;
-BEGIN
-    BEGIN
-        v_user_id := current_setting('app.current_user_id', true)::INT;
-    EXCEPTION WHEN OTHERS THEN
-        v_user_id := NULL;
-    END;
-
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
-        VALUES ('test_plans', 'INSERT', NEW.test_plan_id, v_user_id, NULL, to_jsonb(NEW), inet_client_addr());
-        RETURN NEW;
-
-    ELSIF TG_OP = 'UPDATE' THEN
-        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
-        VALUES ('test_plans', 'UPDATE', NEW.test_plan_id, v_user_id, to_jsonb(OLD), to_jsonb(NEW), inet_client_addr());
-        RETURN NEW;
-
-    ELSIF TG_OP = 'DELETE' THEN
-        INSERT INTO audit_log (table_name, operation, record_id, user_id, old_values, new_values, ip_address)
-        VALUES ('test_plans', 'DELETE', OLD.test_plan_id, v_user_id, to_jsonb(OLD), NULL, inet_client_addr());
-        RETURN OLD;
-    END IF;
-
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
--- Триггер для блокировки учетной записи после 5 неудачных попыток
+-- Триггер для блокировки учетной записи по порогам неудачных попыток (ПолИБ-2.5):
+--   >= 5  попыток → блокировка на 15 минут
+--   >= 10 попыток → бессрочная блокировка до ручной разблокировки администратором
 CREATE OR REPLACE FUNCTION lock_user_account()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF NEW.failed_login_attempts > OLD.failed_login_attempts
-       AND NEW.failed_login_attempts >= 5 THEN
-        NEW.account_locked_until = CURRENT_TIMESTAMP + INTERVAL '30 minutes';
+    IF NEW.failed_login_attempts > OLD.failed_login_attempts THEN
+        IF NEW.failed_login_attempts >= 10 THEN
+            NEW.account_locked_until = 'infinity'::TIMESTAMPTZ;
+        ELSIF NEW.failed_login_attempts >= 5 THEN
+            NEW.account_locked_until = CURRENT_TIMESTAMP + INTERVAL '15 minutes';
+        END IF;
     END IF;
     RETURN NEW;
 END;
@@ -222,7 +111,7 @@ COMMENT ON FUNCTION get_active_sessions() IS 'Просмотр активных 
 -- +goose Down
 -- +goose StatementBegin
 DROP FUNCTION IF EXISTS update_updated_at_column();
-DROP FUNCTION IF EXISTS audit_trigger_function();
+DROP FUNCTION IF EXISTS audit_generic();
 DROP TRIGGER IF EXISTS trg_lock_user_account ON users;
 DROP FUNCTION IF EXISTS lock_user_account();
 DROP FUNCTION IF EXISTS get_active_sessions();

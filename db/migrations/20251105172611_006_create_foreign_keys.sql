@@ -27,12 +27,14 @@ ALTER TABLE tool_config_params ADD CONSTRAINT fk_tool_config_params_to_tool_conf
 -- Reports
 ALTER TABLE reports ADD CONSTRAINT fk_reports_to_report_templates 
     FOREIGN KEY (template_id) REFERENCES report_templates (template_id) ON DELETE RESTRICT;
-ALTER TABLE reports ADD CONSTRAINT fk_reports_to_users 
-    FOREIGN KEY (owner_user_id) REFERENCES users (user_id) ON DELETE SET NULL;
+ALTER TABLE reports ADD CONSTRAINT fk_reports_to_users
+    FOREIGN KEY (owner_user_id) REFERENCES users (user_id) ON DELETE RESTRICT;
 
 -- Test Plans
-ALTER TABLE test_plans ADD CONSTRAINT fk_test_plans_to_users_owner 
+ALTER TABLE test_plans ADD CONSTRAINT fk_test_plans_to_users_owner
     FOREIGN KEY (owner_user_id) REFERENCES users (user_id) ON DELETE RESTRICT;
+ALTER TABLE test_plans ADD CONSTRAINT fk_test_plans_to_priorities
+    FOREIGN KEY (priority_id) REFERENCES priorities (priority_id) ON DELETE RESTRICT;
 
 -- Test Cases
 ALTER TABLE test_cases ADD CONSTRAINT fk_test_cases_to_priorities 
@@ -53,12 +55,16 @@ ALTER TABLE autotest_versions ADD CONSTRAINT fk_autotest_versions_to_autotests
     FOREIGN KEY (autotest_id) REFERENCES autotests (autotest_id) ON DELETE CASCADE;
 
 -- Test Runs
-ALTER TABLE test_runs ADD CONSTRAINT fk_test_runs_to_test_plans 
+ALTER TABLE test_runs ADD CONSTRAINT fk_test_runs_to_test_plans
     FOREIGN KEY (test_plan_id) REFERENCES test_plans (test_plan_id) ON DELETE RESTRICT;
-ALTER TABLE test_runs ADD CONSTRAINT fk_test_runs_to_users_created_by 
+ALTER TABLE test_runs ADD CONSTRAINT fk_test_runs_to_users_created_by
     FOREIGN KEY (created_by) REFERENCES users (user_id) ON DELETE SET NULL;
-ALTER TABLE test_runs ADD CONSTRAINT fk_test_runs_to_env_configs 
+ALTER TABLE test_runs ADD CONSTRAINT fk_test_runs_to_env_configs
     FOREIGN KEY (env_config_id) REFERENCES env_configs (env_config_id) ON DELETE RESTRICT;
+ALTER TABLE test_runs ADD CONSTRAINT fk_test_runs_to_app_versions
+    FOREIGN KEY (version_id) REFERENCES app_versions (version_id) ON DELETE RESTRICT;
+ALTER TABLE test_runs ADD CONSTRAINT fk_test_runs_to_tool_configs
+    FOREIGN KEY (tool_config_id) REFERENCES tool_configs (tool_config_id) ON DELETE RESTRICT;
 
 -- Test Run Items
 ALTER TABLE test_run_items ADD CONSTRAINT fk_test_run_items_to_test_runs 
@@ -88,6 +94,8 @@ ALTER TABLE test_results DROP CONSTRAINT IF EXISTS fk_test_results_to_statuses;
 ALTER TABLE test_results DROP CONSTRAINT IF EXISTS fk_test_results_to_test_run_items;
 ALTER TABLE test_run_items DROP CONSTRAINT IF EXISTS fk_test_run_items_to_test_cases;
 ALTER TABLE test_run_items DROP CONSTRAINT IF EXISTS fk_test_run_items_to_test_runs;
+ALTER TABLE test_runs DROP CONSTRAINT IF EXISTS fk_test_runs_to_tool_configs;
+ALTER TABLE test_runs DROP CONSTRAINT IF EXISTS fk_test_runs_to_app_versions;
 ALTER TABLE test_runs DROP CONSTRAINT IF EXISTS fk_test_runs_to_env_configs;
 ALTER TABLE test_runs DROP CONSTRAINT IF EXISTS fk_test_runs_to_users_created_by;
 ALTER TABLE test_runs DROP CONSTRAINT IF EXISTS fk_test_runs_to_test_plans;
@@ -96,6 +104,7 @@ ALTER TABLE autotests DROP CONSTRAINT IF EXISTS fk_autotests_to_test_cases;
 ALTER TABLE test_case_steps DROP CONSTRAINT IF EXISTS fk_test_case_steps_to_test_cases;
 ALTER TABLE test_cases DROP CONSTRAINT IF EXISTS fk_test_cases_to_users_owner;
 ALTER TABLE test_cases DROP CONSTRAINT IF EXISTS fk_test_cases_to_priorities;
+ALTER TABLE test_plans DROP CONSTRAINT IF EXISTS fk_test_plans_to_priorities;
 ALTER TABLE test_plans DROP CONSTRAINT IF EXISTS fk_test_plans_to_users_owner;
 ALTER TABLE reports DROP CONSTRAINT IF EXISTS fk_reports_to_users;
 ALTER TABLE reports DROP CONSTRAINT IF EXISTS fk_reports_to_report_templates;

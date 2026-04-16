@@ -73,25 +73,53 @@ const DATA = {
   ],
 };
 
+// ... (TABLES, FKS, DATA оставляем без изменений из прошлого ответа) ...
+// Для краткости я не дублирую массивы TABLES, FKS и DATA.
+// Предполагается, что они объявлены выше.
+
 let activeTable = "test_cases";
 
 function el(id) { return document.getElementById(id); }
+
+// --- Рендеринг ---
 
 function renderTablesList() {
   const root = el("tablesList");
   root.innerHTML = "";
   TABLES.forEach(t => {
-    const btn = document.createElement("button");
-    btn.className = "tableBtn" + (t === activeTable ? " active" : "");
+    const btn = document.createElement("div");
+    btn.className = "nav-item" + (t === activeTable ? " active" : "");
     btn.textContent = t;
     btn.onclick = () => { activeTable = t; refresh(); };
     root.appendChild(btn);
   });
 }
 
+function getProcessedData(tableName) {
+    let rows = DATA[tableName] || [];
+    
+    // 1. Фильтрация
+    const filterVal = el("filterInput").value.toLowerCase();
+    if (filterVal) {
+        rows = rows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(filterVal)));
+    }
+
+    // 2. Сортировка (по первому полю для простоты)
+    const sortType = el("sortSelect").value;
+    if (rows.length > 0) {
+        const key = Object.keys(rows[0])[0]; // Берем ID или первое поле
+        rows = [...rows].sort((a, b) => {
+            if (a[key] < b[key]) return sortType === 'asc' ? -1 : 1;
+            if (a[key] > b[key]) return sortType === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+    return rows;
+}
+
 function renderTable(container, tableName, rows) {
   if (!rows || rows.length === 0) {
-    container.innerHTML = `<div class="empty">Нет данных</div>`;
+    container.innerHTML = `<div class="empty-state">Нет данных</div>`;
     return;
   }
   const cols = Object.keys(rows[0]);
@@ -99,51 +127,107 @@ function renderTable(container, tableName, rows) {
   const tbody = `<tbody>${
     rows.map(r => `<tr>${cols.map(c => `<td>${String(r[c] ?? "")}</td>`).join("")}</tr>`).join("")
   }</tbody>`;
-  container.innerHTML = `<table class="tbl">${thead}${tbody}</table>`;
-}
-
-function neighborsFor(tableName) {
-  // соседи = таблицы, которые ссылаются на активную ИЛИ на которые ссылается активная
-  const out = new Set();
-  FKS.forEach(fk => {
-    if (fk.fromTable === tableName) out.add(fk.toTable);
-    if (fk.toTable === tableName) out.add(fk.fromTable);
-  });
-  return [...out];
+  container.innerHTML = `<table class="data-table">${thead}${tbody}</table>`;
 }
 
 function renderNeighbors() {
   const root = el("neighbors");
   root.innerHTML = "";
 
-  const ns = neighborsFor(activeTable);
-  if (ns.length === 0) {
-    root.innerHTML = `<div class="empty">Нет связей</div>`;
+  const ns = new Set();
+  FKS.forEach(fk => {
+    if (fk.fromTable === activeTable) ns.add(fk.toTable);
+    if (fk.toTable === activeTable) ns.add(fk.fromTable);
+  });
+
+  if (ns.size === 0) {
+    root.innerHTML = `<div class="empty-state">Нет связанных таблиц</div>`;
     return;
   }
 
   ns.forEach(t => {
-    const card = document.createElement("div");
-    card.className = "neighborCard";
-    const title = document.createElement("div");
-    title.className = "neighborTitle";
-    title.textContent = t;
+    const wrapper = document.createElement("div");
+    wrapper.className = "neighbor-card";
+    
+    // Заголовок соседа
+    const header = document.createElement("div");
+    header.className = "neighbor-header";
+    header.innerHTML = `<span class="neighbor-title">${t}</span>`;
+    
+    // Мини-тулбар для соседа (как просили в задаче - к каждой таблице)
+    const miniToolbar = document.createElement("div");
+    miniToolbar.className = "mini-toolbar";
+    miniToolbar.innerHTML = `
+        <button class="btn btn-xs" onclick="alert('Open modal for ${t}')">Edit</button>
+        <select class="input-xs"><option>AZ</option><option>ZA</option></select>
+        <input class="input-xs" placeholder="Filter..." style="width:60px">
+    `;
+    
+    header.appendChild(miniToolbar);
+    wrapper.appendChild(header);
 
     const grid = document.createElement("div");
-    grid.className = "neighborGrid";
-    renderTable(grid, t, DATA[t]);
-
-    card.appendChild(title);
-    card.appendChild(grid);
-    root.appendChild(card);
+    grid.className = "neighbor-content";
+    renderTable(grid, t, DATA[t] || []);
+    wrapper.appendChild(grid);
+    
+    root.appendChild(wrapper);
   });
+}
+
+// --- Интерактивность ---
+
+function applyFilter() {
+    renderTable(el("activeTable"), activeTable, getProcessedData(activeTable));
+}
+
+function applySort() {
+    renderTable(el("activeTable"), activeTable, getProcessedData(activeTable));
 }
 
 function refresh() {
   renderTablesList();
   el("activeTitle").textContent = `Таблица: ${activeTable}`;
-  renderTable(el("activeTable"), activeTable, DATA[activeTable]);
+  // Сброс фильтров при смене таблицы
+  el("filterInput").value = ""; 
+  renderTable(el("activeTable"), activeTable, getProcessedData(activeTable));
   renderNeighbors();
 }
 
+// --- Модальное окно ---
+
+function openModal(actionType) {
+    const modal = el("modalOverlay");
+    const fieldsContainer = el("modalFormFields");
+    const title = el("modalTitle");
+    
+    title.textContent = actionType === 'CREATE' ? `Создание записи в ${activeTable}` : 'Редактирование';
+    fieldsContainer.innerHTML = "";
+
+    // Генерируем поля на основе ключей первой записи (или заглушки, если пусто)
+    const exampleRow = (DATA[activeTable] && DATA[activeTable][0]) ? DATA[activeTable][0] : { id: '', name: '' };
+    
+    Object.keys(exampleRow).forEach(key => {
+        const div = document.createElement("div");
+        div.className = "form-group";
+        div.innerHTML = `
+            <label>${key}</label>
+            <input type="text" class="input-text" name="${key}" placeholder="">
+        `;
+        fieldsContainer.appendChild(div);
+    });
+
+    modal.classList.remove("hidden");
+}
+
+function closeModal() {
+    el("modalOverlay").classList.add("hidden");
+}
+
+function mockAction(action) {
+    alert(`MOCK ACTION: ${action} executed for table ${activeTable}`);
+    closeModal();
+}
+
+// Инициализация
 refresh();

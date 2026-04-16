@@ -11,24 +11,57 @@
     <div class="brand">DB Explorer</div>
     <div class="userbox">
       <span id="currentUser">mock: ivan_ivanov</span>
-      <a href="/login">Выйти</a>
+      <a href="/login" class="logout-link">Выйти</a>
     </div>
   </header>
 
   <main class="layout">
-    <section class="tables">
+    <section class="sidebar">
       <h3>Таблицы</h3>
       <div id="tablesList" class="tablesList"></div>
     </section>
 
     <section class="content">
-      <h3 id="activeTitle">Таблица: —</h3>
-      <div id="activeTable" class="grid"></div>
+      <div class="panel-header">
+        <h3 id="activeTitle">Таблица: —</h3>
+      </div>
+      
+      <!-- Панель инструментов для активной таблицы -->
+      <div class="toolbar" id="mainToolbar">
+        <button class="btn btn-primary" onclick="openModal('CREATE')">+ Создать запись</button>
+        <div class="toolbar-group">
+            <select class="input-select" id="sortSelect" onchange="applySort()">
+                <option value="asc">Сортировка: А-Я</option>
+                <option value="desc">Сортировка: Я-А</option>
+            </select>
+            <input type="text" class="input-text" id="filterInput" placeholder="Фильтр..." oninput="applyFilter()">
+        </div>
+      </div>
 
-      <h4>Связанные таблицы</h4>
-      <div id="neighbors" class="neighbors"></div>
+      <div id="activeTable" class="grid-container"></div>
+
+      <h4 class="section-title">Связанные таблицы (Neighbors)</h4>
+      <div id="neighbors" class="neighbors-grid"></div>
     </section>
   </main>
+
+  <!-- Модальное окно -->
+  <div id="modalOverlay" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalTitle">Редактирование</h3>
+        <button class="close-btn" onclick="closeModal()">×</button>
+      </div>
+      <div class="modal-body" id="modalFormFields">
+        <!-- Поля генерируются JS -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success" onclick="mockAction('CREATE')">Создать</button>
+        <button class="btn btn-warning" onclick="mockAction('UPDATE')">Обновить</button>
+        <button class="btn btn-danger" onclick="mockAction('DELETE')">Удалить</button>
+      </div>
+    </div>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>

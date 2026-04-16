@@ -7,45 +7,45 @@ import (
 
 // TestPlan представляет данные из v_public_test_plans
 type TestPlan struct {
-	ID          int          `db:"test_plan_id"`
-	Name        string       `db:"test_plan_name"`
-	Description string       `db:"description"`
-	StartDate   time.Time    `db:"start_date"`
-	EndDate     time.Time    `db:"end_date"`
-	Status      string       `db:"status"`
-	Owner       string       `db:"owner"`
-	Priority    string       `db:"priority"`
+	ID          int            `db:"test_plan_id"`
+	Name        string         `db:"test_plan_name"`
+	Description sql.NullString `db:"description"`
+	StartDate   time.Time      `db:"start_date"`
+	EndDate     time.Time      `db:"end_date"`
+	Status      string         `db:"status"`
+	Owner       sql.NullString `db:"owner"`
+	Priority    string         `db:"priority"`
 }
 
 // TestCase представляет данные из v_lead_all_cases
 type TestCase struct {
-	ID          int          `db:"test_case_id"`
-	Name        string       `db:"test_case_name"`
-	Description string       `db:"description"`
-	IsAutomated bool         `db:"is_automated"`
-	IsActive    bool         `db:"is_active"`
-	Priority    string       `db:"priority"`
-	Owner       string       `db:"owner"`
+	ID          int            `db:"test_case_id"`
+	Name        string         `db:"test_case_name"`
+	Description sql.NullString `db:"description"`
+	IsAutomated bool           `db:"is_automated"`
+	IsActive    bool           `db:"is_active"`
+	Priority    string         `db:"priority"`
+	Owner       sql.NullString `db:"owner"`
 }
 
 // Autotest представляет данные из v_engineer_autotests
 type Autotest struct {
-	ID            int          `db:"autotest_id"`
-	Name          string       `db:"autotest_name"`
-	Description   string       `db:"description"`
-	IsActive      bool         `db:"is_active"`
-	VersionString string       `db:"version_string"`
-	CommitHash    string       `db:"commit_hash"`
-	Author        string       `db:"author"`
+	ID            int            `db:"autotest_id"`
+	Name          string         `db:"autotest_name"`
+	Description   sql.NullString `db:"description"`
+	IsActive      bool           `db:"is_active"`
+	VersionString string         `db:"version_string"`
+	CommitHash    sql.NullString `db:"commit_hash"`
+	Author        sql.NullString `db:"author"`
 }
 
 // Environment представляет данные из v_shared_environments
 type Environment struct {
-	ID          int    `db:"env_config_id"`
-	Name        string `db:"environment_name"`
-	Description string `db:"description"`
-	IsActive    bool   `db:"is_active"`
-	ParamsCount int    `db:"params_count"`
+	ID          int            `db:"env_config_id"`
+	Name        string         `db:"environment_name"`
+	Description sql.NullString `db:"description"`
+	IsActive    bool           `db:"is_active"`
+	ParamsCount int            `db:"params_count"`
 }
 
 // PublicResult представляет данные из v_public_results
@@ -70,50 +70,51 @@ type TestResult struct {
 
 // Report представляет данные из v_shared_reports
 type Report struct {
-	ID           int       `db:"report_id"`
-	Name         string    `db:"report_name"`
-	CreationDate time.Time `db:"creation_date"`
-	Template     string    `db:"template"`
-	Author       string    `db:"author"`
+	ID           int            `db:"report_id"`
+	Name         string         `db:"report_name"`
+	CreationDate time.Time      `db:"creation_date"`
+	Template     string         `db:"template"`
+	Author       sql.NullString `db:"author"`
 }
 
 // UserAdminView представляет данные из v_admin_users_and_roles
 type UserAdminView struct {
-	ID        int          `db:"user_id"`
-	Username  string       `db:"username"`
-	FullName  string       `db:"full_name"`
-	Email     string       `db:"email"`
-	IsActive  bool         `db:"is_active"`
-	LastLogin sql.NullTime `db:"last_login"`
-	Roles     string       `db:"roles"`
+	ID        int            `db:"user_id"`
+	Username  string         `db:"username"`
+	FullName  sql.NullString `db:"full_name"`
+	Email     sql.NullString `db:"email"`
+	IsActive  bool           `db:"is_active"`
+	LastLogin sql.NullTime   `db:"last_login"`
+	Roles     sql.NullString `db:"roles"`
 }
 
 // ActiveRun представляет данные из v_active_test_runs
 type ActiveRun struct {
-	RunID       int    `db:"test_run_id"`
-	RunName     string `db:"run_name"`
-	PlanName    string `db:"plan_name"`
-	Status      string `db:"status"`
-	PassedTests int    `db:"passed_tests"`
-	FailedTests int    `db:"failed_tests"`
+	RunID        int    `db:"test_run_id"`
+	RunName      string `db:"run_name"`
+	PlanName     string `db:"plan_name"`
+	Status       string `db:"status"`
+	PassedTests  int    `db:"passed_tests"`
+	FailedTests  int    `db:"failed_tests"`
+	BlockedTests int    `db:"blocked_tests"`
 }
 
 // RunSummary представляет данные из v_test_execution_summary
 type RunSummary struct {
-	RunID      int     `db:"test_run_id"`
-	RunName    string  `db:"test_run_name"`
-	TotalCases int     `db:"total_cases"`
-	Passed     int     `db:"passed"`
-	Failed     int     `db:"failed"`
-	PassRate   float64 `db:"pass_rate"`
+	RunID      int            `db:"test_run_id"`
+	RunName    string         `db:"test_run_name"`
+	TotalCases int            `db:"total_cases"`
+	Passed     int            `db:"passed"`
+	Failed     int            `db:"failed"`
+	PassRate   sql.NullFloat64 `db:"pass_rate"`
 }
 
 // CaseStats представляет данные из v_test_case_statistics
 type CaseStats struct {
-	TestCaseID      int     `db:"test_case_id"`
-	Name            string  `db:"name"`
-	PassRatePercent float64 `db:"pass_rate_percent"`
-	AvgDurationMins float64 `db:"avg_duration_minutes"`
+	TestCaseID      int             `db:"test_case_id"`
+	Name            string          `db:"name"`
+	PassRatePercent sql.NullFloat64 `db:"pass_rate_percent"`
+	AvgDurationMins sql.NullFloat64 `db:"avg_duration_minutes"`
 }
 
 // TestCaseDTO для создания/обновления тест-кейса
@@ -134,11 +135,12 @@ type StepDTO struct {
 
 // RunDTO для создания тестового прогона
 type RunDTO struct {
-	Name      string `json:"name"`
-	PlanID    int    `json:"planId"`
-	VersionID int    `json:"versionId"`
-	EnvID     int    `json:"envId"`
-	UserID    int    `json:"userId"`
+	Name         string `json:"name"`
+	PlanID       int    `json:"planId"`
+	VersionID    int    `json:"versionId"`
+	EnvID        int    `json:"envId"`
+	ToolConfigID int    `json:"toolConfigId"`
+	UserID       int    `json:"userId"`
 }
 
 // ResultDTO для создания результата теста
@@ -151,12 +153,13 @@ type ResultDTO struct {
 
 // ArtifactDTO для добавления артефакта к результату
 type ArtifactDTO struct {
+	Kind string `json:"kind"` // SCREENSHOT | LOG | VIDEO | REPORT | OTHER
 	Path string `json:"path"`
-	Name string `json:"name"`
 }
 
 // AutotestDTO для создания/обновления автотеста
 type AutotestDTO struct {
+	TestCaseID  int    `json:"testCaseId"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	OwnerID     int    `json:"ownerId"`

@@ -45,6 +45,7 @@ CREATE TABLE roles (
     code VARCHAR(50) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL,
     description TEXT NULL,
+    db_role_name VARCHAR(100) NOT NULL UNIQUE,
     access_level SMALLINT NOT NULL DEFAULT 1 CHECK (access_level BETWEEN 1 AND 10),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

@@ -3,11 +3,18 @@ package repository
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// safeColRe допускает только snake_case идентификаторы.
+// Filter-ключи должны быть хардкодированными константами в репозитории —
+// никогда не передавать пользовательский ввод напрямую в Filter.
+var safeColRe = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
 // Paging определяет параметры пагинации
 type Paging struct {
@@ -16,12 +23,12 @@ type Paging struct {
 }
 
 // Filter - карта фильтров (ключ: колонка, значение: значение)
-type Filter map[string]interface{}
+type Filter map[string]any
 
 type DBTX interface {
-	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
-	Query(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string, arguments ...interface{}) pgx.Row
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, arguments ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, arguments ...any) pgx.Row
 	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
@@ -34,24 +41,32 @@ func NewRepository(db DBTX) *Repository {
 	return &Repository{db: db}
 }
 
-// Вспомогательная функция для построения WHERE и аргументов
-func buildWhereClause(filter Filter, paging *Paging) (string, []interface{}) {
+// buildWhereClause строит WHERE-клаузу из фильтра.
+// ВАЖНО: ключи Filter должны быть хардкодированными строковыми литералами.
+// Передача пользовательского ввода в качестве ключа — программная ошибка; функция вернёт error.
+func buildWhereClause(filter Filter, paging *Paging) (string, []any, error) {
 	var conditions []string
-	var args []interface{}
+	var args []any
 	idx := 1
 
-	for k, v := range filter {
-		// Простая реализация равенства. Для LIKE, >, < нужна более сложная логика
+	keys := make([]string, 0, len(filter))
+	for k := range filter {
+		if !safeColRe.MatchString(k) {
+			return "", nil, fmt.Errorf("buildWhereClause: небезопасное имя колонки %q — ключи Filter должны быть хардкодированными константами", k)
+		}
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+
+	for _, k := range keys {
 		conditions = append(conditions, fmt.Sprintf("%s = $%d", k, idx))
-		args = append(args, v)
+		args = append(args, filter[k])
 		idx++
 	}
 
 	query := ""
 	if len(conditions) > 0 {
 		query = " WHERE " + strings.Join(conditions, " AND ")
-	} else {
-		query = " WHERE 1=1 " // Чтобы всегда можно было добавить LIMIT/OFFSET
 	}
 
 	if paging != nil {
@@ -67,5 +82,5 @@ func buildWhereClause(filter Filter, paging *Paging) (string, []interface{}) {
 		}
 	}
 
-	return query, args
+	return query, args, nil
 }

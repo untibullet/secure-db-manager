@@ -30,9 +30,9 @@ func (r *Repository) DeleteResult(ctx context.Context, id int) error {
 }
 
 func (r *Repository) AddResultArtifact(ctx context.Context, resultID int, dto ArtifactDTO) (int, error) {
-	sql := `INSERT INTO v_test_result_artifacts (test_result_id, file_path, file_name) 
+	sql := `INSERT INTO v_test_result_artifacts (test_result_id, kind, file_path)
             VALUES ($1, $2, $3) RETURNING artifact_id`
 	var id int
-	err := r.db.QueryRow(ctx, sql, resultID, dto.Path, dto.Name).Scan(&id)
+	err := r.db.QueryRow(ctx, sql, resultID, dto.Kind, dto.Path).Scan(&id)
 	return id, err
 }
