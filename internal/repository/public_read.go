@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func (r *Repository) ListPublicTestPlans(ctx context.Context, filter Filter, paging Paging) ([]TestPlan, error) {
+func (r *AppRepository) ListPublicTestPlans(ctx context.Context, filter Filter, paging Paging) ([]TestPlan, error) {
 	where, args, err := buildWhereClause(filter, &paging)
 	if err != nil {
 		return nil, fmt.Errorf("ListPublicTestPlans: %w", err)
@@ -30,7 +30,7 @@ func (r *Repository) ListPublicTestPlans(ctx context.Context, filter Filter, pag
 	return plans, rows.Err()
 }
 
-func (r *Repository) ListPublicResults(ctx context.Context, filter Filter, paging Paging) ([]PublicResult, error) {
+func (r *AppRepository) ListPublicResults(ctx context.Context, filter Filter, paging Paging) ([]PublicResult, error) {
 	where, args, err := buildWhereClause(filter, &paging)
 	if err != nil {
 		return nil, fmt.Errorf("ListPublicResults: %w", err)
@@ -55,7 +55,7 @@ func (r *Repository) ListPublicResults(ctx context.Context, filter Filter, pagin
 	return results, rows.Err()
 }
 
-func (r *Repository) ListSharedEnvironments(ctx context.Context, filter Filter) ([]Environment, error) {
+func (r *AppRepository) ListSharedEnvironments(ctx context.Context, filter Filter) ([]Environment, error) {
 	where, args, err := buildWhereClause(filter, nil)
 	if err != nil {
 		return nil, fmt.Errorf("ListSharedEnvironments: %w", err)
@@ -80,7 +80,7 @@ func (r *Repository) ListSharedEnvironments(ctx context.Context, filter Filter) 
 	return environments, rows.Err()
 }
 
-func (r *Repository) ListSharedReports(ctx context.Context, filter Filter, paging Paging) ([]Report, error) {
+func (r *AppRepository) ListSharedReports(ctx context.Context, filter Filter, paging Paging) ([]Report, error) {
 	where, args, err := buildWhereClause(filter, &paging)
 	if err != nil {
 		return nil, fmt.Errorf("ListSharedReports: %w", err)

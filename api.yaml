@@ -1,0 +1,1805 @@
+openapi: 3.1.0
+
+info:
+  title: Secure DB Manager API
+  description: >
+    REST API системы управления автоматизированным тестированием ПО.
+    Безопасность реализована на уровне PostgreSQL: каждый пользователь подключается
+    к БД от имени персональной DB-роли, RLS обеспечивает изоляцию данных.
+  version: "1.0"
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+security:
+  - bearerAuth: []
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT содержит sub (user_id) и exp. Данные сессии хранятся на сервере.
+
+  parameters:
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    OffsetParam:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+
+  responses:
+    Unauthorized:
+      description: JWT отсутствует или недействителен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Недостаточно прав для выполнения операции
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+
+    # ── Общие ──────────────────────────────────────────────────────────────────
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Machine-readable идентификатор ошибки
+          example: not_found
+        message:
+          type: string
+          description: Human-readable описание
+          example: Test plan not found
+
+    PageMeta:
+      type: object
+      required: [total, limit, offset]
+      properties:
+        total:
+          type: integer
+          example: 42
+        limit:
+          type: integer
+          example: 20
+        offset:
+          type: integer
+          example: 0
+
+    # ── Auth ───────────────────────────────────────────────────────────────────
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: alice
+        password:
+          type: string
+          format: password
+
+    LoginResponse:
+      type: object
+      required: [token, expires_at]
+      properties:
+        token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+
+    # ── Users (Admin) ──────────────────────────────────────────────────────────
+
+    UserView:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        full_name:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        last_login:
+          type: string
+          format: date-time
+          nullable: true
+        roles:
+          type: array
+          items:
+            type: string
+          description: Список назначенных ролей
+
+    CreateUserRequest:
+      type: object
+      required: [username, password, role_id]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+        full_name:
+          type: string
+        email:
+          type: string
+          format: email
+        role_id:
+          type: integer
+          description: Начальная роль пользователя
+
+    AssignRoleRequest:
+      type: object
+      required: [role_id]
+      properties:
+        role_id:
+          type: integer
+        valid_until:
+          type: string
+          format: date-time
+          nullable: true
+          description: Срок действия роли. null — бессрочно
+
+    SetActiveRequest:
+      type: object
+      required: [is_active]
+      properties:
+        is_active:
+          type: boolean
+
+    LockRequest:
+      type: object
+      properties:
+        locked_until:
+          type: string
+          format: date-time
+          nullable: true
+          description: Дата снятия блокировки. null — снять немедленно
+
+    # ── Test Plans ─────────────────────────────────────────────────────────────
+
+    TestPlanView:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        start_date:
+          type: string
+          format: date-time
+        end_date:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [DRAFT, ACTIVE, COMPLETED, ARCHIVED]
+        owner:
+          type: string
+          nullable: true
+        priority:
+          type: string
+
+    TestPlanRequest:
+      type: object
+      required: [name, start_date, end_date, priority_id, owner_id]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        start_date:
+          type: string
+          format: date-time
+        end_date:
+          type: string
+          format: date-time
+        priority_id:
+          type: integer
+        owner_id:
+          type: integer
+
+    # ── Test Cases ─────────────────────────────────────────────────────────────
+
+    TestCaseView:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        is_automated:
+          type: boolean
+        is_active:
+          type: boolean
+        priority:
+          type: string
+        owner:
+          type: string
+          nullable: true
+
+    TestCaseRequest:
+      type: object
+      required: [name, priority_id, owner_id]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        priority_id:
+          type: integer
+        owner_id:
+          type: integer
+        is_automated:
+          type: boolean
+          default: false
+
+    StepView:
+      type: object
+      properties:
+        id:
+          type: integer
+        step_order:
+          type: integer
+        action_text:
+          type: string
+        expected_result:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    StepRequest:
+      type: object
+      required: [order, action, expected]
+      properties:
+        order:
+          type: integer
+        action:
+          type: string
+        expected:
+          type: string
+
+    # ── Test Runs ──────────────────────────────────────────────────────────────
+
+    RunView:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        plan_name:
+          type: string
+        status:
+          type: string
+          enum: [PLANNED, IN_PROGRESS, COMPLETED, FAILED, CANCELLED]
+        passed_tests:
+          type: integer
+        failed_tests:
+          type: integer
+        blocked_tests:
+          type: integer
+        total_tests:
+          type: integer
+
+    CreateRunRequest:
+      type: object
+      required: [name, plan_id, version_id, env_id, tool_config_id]
+      properties:
+        name:
+          type: string
+        plan_id:
+          type: integer
+        version_id:
+          type: integer
+        env_id:
+          type: integer
+        tool_config_id:
+          type: integer
+
+    UpdateRunStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [PLANNED, IN_PROGRESS, COMPLETED, FAILED, CANCELLED]
+
+    RunItemView:
+      type: object
+      properties:
+        run_item_id:
+          type: integer
+        test_run_id:
+          type: integer
+        test_case_id:
+          type: integer
+        execution_order:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    AddRunItemRequest:
+      type: object
+      required: [test_case_id]
+      properties:
+        test_case_id:
+          type: integer
+        order:
+          type: integer
+          nullable: true
+
+    # ── Test Results ───────────────────────────────────────────────────────────
+
+    ResultView:
+      type: object
+      description: >
+        Полная проекция доступна ролям test_lead и automation_engineer (v_lead_all_results).
+        Роль tester получает только поля result_id, test_case_name, status, execution_date
+        (v_tester_my_results); поля run_name, executor и error_message в этом случае null.
+      properties:
+        result_id:
+          type: integer
+        run_name:
+          type: string
+          nullable: true
+        test_case_name:
+          type: string
+        status:
+          type: string
+        executor:
+          type: string
+          nullable: true
+        execution_date:
+          type: string
+          format: date-time
+        error_message:
+          type: string
+          nullable: true
+
+    CreateResultRequest:
+      type: object
+      required: [run_item_id, status_id, executor_id]
+      properties:
+        run_item_id:
+          type: integer
+        status_id:
+          type: integer
+        summary:
+          type: string
+        executor_id:
+          type: integer
+
+    UpdateResultRequest:
+      type: object
+      required: [status_id]
+      properties:
+        status_id:
+          type: integer
+        summary:
+          type: string
+
+    ArtifactView:
+      type: object
+      properties:
+        artifact_id:
+          type: integer
+        test_result_id:
+          type: integer
+        kind:
+          type: string
+          enum: [SCREENSHOT, LOG, VIDEO, REPORT, OTHER]
+        file_path:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    AddArtifactRequest:
+      type: object
+      required: [kind, path]
+      properties:
+        kind:
+          type: string
+          enum: [SCREENSHOT, LOG, VIDEO, REPORT, OTHER]
+        path:
+          type: string
+
+    # ── Autotests ──────────────────────────────────────────────────────────────
+
+    AutotestView:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        version_string:
+          type: string
+        commit_hash:
+          type: string
+          nullable: true
+        author:
+          type: string
+          nullable: true
+
+    AutotestRequest:
+      type: object
+      required: [test_case_id, name, owner_id]
+      properties:
+        test_case_id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        owner_id:
+          type: integer
+        is_active:
+          type: boolean
+          default: true
+
+    VersionRequest:
+      type: object
+      required: [version_string]
+      properties:
+        version_string:
+          type: string
+          example: "1.2.3"
+        commit_hash:
+          type: string
+          example: "abc123def456"
+
+    AutotestVersionView:
+      type: object
+      properties:
+        version_id:
+          type: integer
+        autotest_id:
+          type: integer
+        version_string:
+          type: string
+        commit_hash:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Reference Data ─────────────────────────────────────────────────────────
+
+    EnvironmentView:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        params_count:
+          type: integer
+
+    ReportView:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        creation_date:
+          type: string
+          format: date-time
+        template:
+          type: string
+        author:
+          type: string
+          nullable: true
+
+    # ── Statistics ─────────────────────────────────────────────────────────────
+
+    RunSummaryView:
+      type: object
+      properties:
+        run_id:
+          type: integer
+        run_name:
+          type: string
+        total_cases:
+          type: integer
+        passed:
+          type: integer
+        failed:
+          type: integer
+        pass_rate:
+          type: number
+          format: double
+          nullable: true
+
+    CaseStatsView:
+      type: object
+      properties:
+        test_case_id:
+          type: integer
+        name:
+          type: string
+        pass_rate_percent:
+          type: number
+          format: double
+          nullable: true
+        avg_duration_minutes:
+          type: number
+          format: double
+          nullable: true
+
+    # ── Audit ──────────────────────────────────────────────────────────────────
+
+    AuditLogEntry:
+      type: object
+      description: Запись из v_admin_audit_log. Таблица audit_log защищена RLS; прямой доступ закрыт для всех ролей (AD-1).
+      properties:
+        audit_id:
+          type: integer
+        table_name:
+          type: string
+        operation:
+          type: string
+          enum: [INSERT, UPDATE, DELETE]
+        record_id:
+          type: integer
+        user_id:
+          type: integer
+          nullable: true
+        changed_at:
+          type: string
+          format: date-time
+        old_values:
+          type: object
+          nullable: true
+          description: JSONB-снимок строки до изменения
+        new_values:
+          type: object
+          nullable: true
+          description: JSONB-снимок строки после изменения
+        ip_address:
+          type: string
+          nullable: true
+
+# ── Paths ──────────────────────────────────────────────────────────────────────
+
+paths:
+
+  # AUTH ────────────────────────────────────────────────────────────────────────
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Аутентификация
+      description: >
+        Проверяет bcrypt-хеш (users.password_hash), затем открывает *pgx.Conn
+        от имени DB-роли пользователя (AD-11). Возвращает JWT с sub=user_id.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        "200":
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Завершение сессии
+      description: Закрывает *pgx.Conn и удаляет сессию из SessionStore (AD-8).
+      responses:
+        "204":
+          description: Сессия закрыта
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # TEST PLANS ──────────────────────────────────────────────────────────────────
+
+  /test-plans:
+    get:
+      tags: [Test Plans]
+      summary: Список тест-планов
+      description: Доступно всем ролям. Возвращает планы со статусом ACTIVE и COMPLETED (v_public_test_plans).
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [DRAFT, ACTIVE, COMPLETED, ARCHIVED]
+        - name: priority
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TestPlanView'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Test Plans]
+      summary: Создать тест-план
+      description: Доступно роли test_lead.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestPlanRequest'
+      responses:
+        "201":
+          description: Создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestPlanView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /test-plans/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+
+    get:
+      tags: [Test Plans]
+      summary: Получить тест-план по ID
+      description: Доступно всем ролям.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestPlanView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Test Plans]
+      summary: Обновить тест-план
+      description: Доступно роли test_lead.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestPlanRequest'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestPlanView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Test Plans]
+      summary: Удалить тест-план
+      description: Доступно роли test_lead.
+      responses:
+        "204":
+          description: Удалён
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  # TEST CASES ──────────────────────────────────────────────────────────────────
+
+  /test-cases:
+    get:
+      tags: [Test Cases]
+      summary: Список тест-кейсов
+      description: Доступно ролям test_lead, automation_engineer, developer (v_lead_all_cases).
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+        - name: is_automated
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TestCaseView'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Test Cases]
+      summary: Создать тест-кейс
+      description: Доступно роли test_lead.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestCaseRequest'
+      responses:
+        "201":
+          description: Создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestCaseView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /test-cases/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+
+    get:
+      tags: [Test Cases]
+      summary: Получить тест-кейс по ID
+      description: Доступно ролям test_lead, automation_engineer, developer, tester.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestCaseView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Test Cases]
+      summary: Обновить тест-кейс
+      description: Доступно роли test_lead.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestCaseRequest'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestCaseView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Test Cases]
+      summary: Удалить тест-кейс
+      description: Доступно роли test_lead.
+      responses:
+        "204":
+          description: Удалён
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /test-cases/{id}/steps:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+
+    get:
+      tags: [Test Cases]
+      summary: Список шагов тест-кейса
+      description: Доступно ролям test_lead, automation_engineer, tester.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StepView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags: [Test Cases]
+      summary: Добавить шаг к тест-кейсу
+      description: Доступно ролям test_lead, automation_engineer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StepRequest'
+      responses:
+        "201":
+          description: Создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StepView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /test-cases/{id}/steps/{stepId}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+      - name: stepId
+        in: path
+        required: true
+        schema:
+          type: integer
+
+    put:
+      tags: [Test Cases]
+      summary: Обновить шаг тест-кейса
+      description: Доступно ролям test_lead, automation_engineer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StepRequest'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StepView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Test Cases]
+      summary: Удалить шаг тест-кейса
+      description: Доступно ролям test_lead, automation_engineer.
+      responses:
+        "204":
+          description: Удалён
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  # TEST RUNS ───────────────────────────────────────────────────────────────────
+
+  /runs:
+    get:
+      tags: [Test Runs]
+      summary: Список тестовых прогонов
+      description: Доступно ролям test_lead, automation_engineer, tester, developer (v_active_test_runs).
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PLANNED, IN_PROGRESS, COMPLETED, FAILED, CANCELLED]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RunView'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Test Runs]
+      summary: Создать тестовый прогон
+      description: Доступно ролям test_lead, cicd_system.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRunRequest'
+      responses:
+        "201":
+          description: Создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /runs/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+
+    get:
+      tags: [Test Runs]
+      summary: Получить прогон по ID
+      description: Доступно ролям test_lead, automation_engineer, tester.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Test Runs]
+      summary: Удалить прогон
+      description: Доступно роли test_lead.
+      responses:
+        "204":
+          description: Удалён
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /runs/{id}/status:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+
+    patch:
+      tags: [Test Runs]
+      summary: Изменить статус прогона
+      description: Доступно ролям test_lead, cicd_system.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRunStatusRequest'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /runs/{id}/items:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+
+    get:
+      tags: [Test Runs]
+      summary: Список тест-кейсов в прогоне
+      description: Доступно ролям test_lead, automation_engineer, tester.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RunItemView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags: [Test Runs]
+      summary: Добавить тест-кейс в прогон
+      description: Доступно ролям test_lead, cicd_system.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddRunItemRequest'
+      responses:
+        "201":
+          description: Добавлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunItemView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /runs/{id}/items/{itemId}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+      - name: itemId
+        in: path
+        required: true
+        schema:
+          type: integer
+
+    delete:
+      tags: [Test Runs]
+      summary: Удалить тест-кейс из прогона
+      description: Доступно роли test_lead.
+      responses:
+        "204":
+          description: Удалён
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  # TEST RESULTS ────────────────────────────────────────────────────────────────
+
+  /results:
+    get:
+      tags: [Test Results]
+      summary: Список результатов тестирования
+      description: |
+        Роли test_lead и automation_engineer видят все результаты (v_lead_all_results).
+        Роль tester видит только свои результаты (v_tester_my_results):
+        поля run_name, executor и error_message не возвращаются.
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: run_id
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ResultView'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Test Results]
+      summary: Записать результат теста
+      description: Доступно ролям tester, automation_engineer, cicd_system. Запись через v_results_manage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateResultRequest'
+      responses:
+        "201":
+          description: Создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /results/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+
+    get:
+      tags: [Test Results]
+      summary: Получить результат по ID
+      description: Роль test_lead — полная проекция. Тестировщик — только свой результат с ограниченными полями.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Test Results]
+      summary: Обновить результат
+      description: Доступно роли test_lead и tester (только свой результат).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateResultRequest'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Test Results]
+      summary: Удалить результат
+      description: Доступно роли test_lead.
+      responses:
+        "204":
+          description: Удалён
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /results/{id}/artifacts:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+
+    get:
+      tags: [Test Results]
+      summary: Список артефактов результата
+      description: Доступно ролям test_lead, automation_engineer, developer, tester, guest.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ArtifactView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags: [Test Results]
+      summary: Добавить артефакт к результату
+      description: Доступно ролям tester, automation_engineer, cicd_system.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddArtifactRequest'
+      responses:
+        "201":
+          description: Добавлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  # AUTOTESTS ───────────────────────────────────────────────────────────────────
+
+  /autotests:
+    get:
+      tags: [Autotests]
+      summary: Список автотестов
+      description: Доступно ролям automation_engineer, test_lead, developer (v_engineer_autotests).
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AutotestView'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Autotests]
+      summary: Создать автотест
+      description: Доступно роли automation_engineer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutotestRequest'
+      responses:
+        "201":
+          description: Создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutotestView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /autotests/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+
+    get:
+      tags: [Autotests]
+      summary: Получить автотест по ID
+      description: Доступно ролям automation_engineer, test_lead, developer.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutotestView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Autotests]
+      summary: Обновить автотест
+      description: >
+        Полное обновление доступно роли automation_engineer.
+        Роль test_lead имеет SELECT и UPDATE через v_autotests_manage,
+        но на уровне сервиса может быть ограничена только полем is_active.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutotestRequest'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutotestView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Autotests]
+      summary: Удалить автотест
+      description: Доступно роли automation_engineer.
+      responses:
+        "204":
+          description: Удалён
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /autotests/{id}/versions:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+
+    post:
+      tags: [Autotests]
+      summary: Добавить версию автотеста
+      description: Доступно роли automation_engineer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+      responses:
+        "201":
+          description: Создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutotestVersionView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  # REFERENCE DATA ──────────────────────────────────────────────────────────────
+
+  /environments:
+    get:
+      tags: [Reference Data]
+      summary: Список конфигураций окружений
+      description: Доступно всем ролям. Возвращает только активные окружения (v_shared_environments).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EnvironmentView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /reports:
+    get:
+      tags: [Reference Data]
+      summary: Список отчётов о качестве
+      description: Доступно всем ролям (v_shared_reports).
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReportView'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # STATISTICS ──────────────────────────────────────────────────────────────────
+
+  /stats/runs:
+    get:
+      tags: [Statistics]
+      summary: Сводка выполнения по прогонам
+      description: Доступно ролям test_lead, automation_engineer, developer (v_test_execution_summary).
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RunSummaryView'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /stats/cases:
+    get:
+      tags: [Statistics]
+      summary: Статистика эффективности тест-кейсов
+      description: Доступно ролям test_lead, automation_engineer, developer (v_test_case_statistics).
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CaseStatsView'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  # ADMIN ───────────────────────────────────────────────────────────────────────
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: Список пользователей с ролями
+      description: Доступно роли admin (v_admin_users_and_roles).
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserView'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Admin]
+      summary: Создать пользователя
+      description: >
+        Доступно роли admin. Создаёт запись в users (UserRepo) и PostgreSQL login-роль
+        (SystemRepo.CreateRole), затем выдаёт начальную групповую роль (SystemRepo.GrantGroupRole).
+        Пароль атомарно сохраняется в bcrypt-хеш и pg_authid через SystemRepo.SetPasswordAndHash (AD-11).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        "201":
+          description: Создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+
+    get:
+      tags: [Admin]
+      summary: Получить пользователя по ID
+      description: Доступно роли admin.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /admin/users/{id}/active:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+
+    patch:
+      tags: [Admin]
+      summary: Активировать / деактивировать пользователя
+      description: Доступно роли admin. Обновляет users.is_active через v_users_manage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetActiveRequest'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /admin/users/{id}/lock:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+
+    patch:
+      tags: [Admin]
+      summary: Установить / снять блокировку учётной записи
+      description: Доступно роли admin. locked_until=null снимает блокировку немедленно.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LockRequest'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserView'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /admin/users/{id}/roles:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+
+    post:
+      tags: [Admin]
+      summary: Назначить роль пользователю
+      description: >
+        Доступно роли admin. Записывает назначение в v_user_roles_manage через
+        UserRepo.AdminInsertUserRole, затем выполняет GRANT через SystemRepo.GrantGroupRole (AD-9).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignRoleRequest'
+      responses:
+        "204":
+          description: Роль назначена
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /admin/users/{id}/roles/{roleId}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+      - name: roleId
+        in: path
+        required: true
+        schema:
+          type: integer
+
+    delete:
+      tags: [Admin]
+      summary: Отозвать роль у пользователя
+      description: >
+        Доступно роли admin. Удаляет запись из v_user_roles_manage,
+        затем выполняет REVOKE через SystemRepo.RevokeGroupRole (AD-9).
+      responses:
+        "204":
+          description: Роль отозвана
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /admin/audit-log:
+    get:
+      tags: [Admin]
+      summary: Журнал аудита
+      description: >
+        Доступно роли admin. Чтение через v_admin_audit_log (AD-1).
+        Прямой доступ к таблице audit_log закрыт для всех ролей через RLS.
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: table_name
+          in: query
+          schema:
+            type: string
+            description: Имя таблицы для фильтрации (например, test_results)
+        - name: operation
+          in: query
+          schema:
+            type: string
+            enum: [INSERT, UPDATE, DELETE]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLogEntry'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'

@@ -32,13 +32,13 @@ type DBTX interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
-// Repository - основная структура слоя данных
-type Repository struct {
+// AppRepository - основная структура слоя данных
+type AppRepository struct {
 	db DBTX // Интерфейс, скрывающий *pgx.Conn, *pgxpool.Pool или pgx.Tx
 }
 
-func NewRepository(db DBTX) *Repository {
-	return &Repository{db: db}
+func NewAppRepository(db DBTX) *AppRepository {
+	return &AppRepository{db: db}
 }
 
 // buildWhereClause строит WHERE-клаузу из фильтра.

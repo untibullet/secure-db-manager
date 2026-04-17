@@ -2,22 +2,31 @@ package jwt
 
 import (
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// Claims содержит только sub (user_id) и стандартные поля exp/iat (AD-8).
+// Роль и остальные данные сессии хранятся в SessionStore, не в токене.
 type Claims struct {
-	UserID int `json:"user_id"`
-	Role   string    `json:"role"`
 	jwt.RegisteredClaims
 }
 
-func Generate(userID int, role, secret string, ttl time.Duration) (string, error) {
+// UserID извлекает user_id из стандартного поля sub.
+func (c *Claims) UserID() (int, error) {
+	id, err := strconv.Atoi(c.Subject)
+	if err != nil {
+		return 0, errors.New("invalid sub claim")
+	}
+	return id, nil
+}
+
+func Generate(userID int, secret string, ttl time.Duration) (string, error) {
 	claims := Claims{
-		UserID: userID,
-		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   strconv.Itoa(userID),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},

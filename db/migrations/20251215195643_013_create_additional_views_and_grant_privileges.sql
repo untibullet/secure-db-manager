@@ -140,7 +140,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON v_users_manage TO db_admin;
 -- 7. Представление ролей пользователей (для Админа)
 -- Примечание: v_admin_users_and_roles уже существует для просмотра, это view для M2M операций
 CREATE OR REPLACE VIEW v_user_roles_manage AS
-SELECT 
+SELECT
     ur.user_id,
     ur.role_id,
     r.name AS role_name,
@@ -151,6 +151,25 @@ JOIN roles r ON ur.role_id = r.role_id;
 
 -- Права:
 GRANT SELECT, INSERT, UPDATE, DELETE ON v_user_roles_manage TO db_admin;
+
+
+-- 8. Плоское представление test_results для записи (auto-updatable, AD-4)
+CREATE OR REPLACE VIEW v_results_manage AS
+SELECT
+    test_result_id,
+    run_item_id,
+    status_id,
+    executor_user_id,
+    execution_date,
+    result_summary,
+    execution_duration_minutes,
+    error_message,
+    created_at
+FROM test_results;
+
+-- Права:
+GRANT SELECT, INSERT, UPDATE, DELETE ON v_results_manage TO db_test_lead;
+GRANT SELECT, INSERT, UPDATE ON v_results_manage TO db_tester, db_automation_engineer, db_cicd_system;
 -- +goose StatementEnd
 
 -- +goose Down
@@ -163,4 +182,5 @@ DROP VIEW IF EXISTS v_test_run_items;
 DROP VIEW IF EXISTS v_test_runs_manage;
 DROP VIEW IF EXISTS v_users_manage;
 DROP VIEW IF EXISTS v_user_roles_manage;
+DROP VIEW IF EXISTS v_results_manage;
 -- +goose StatementEnd

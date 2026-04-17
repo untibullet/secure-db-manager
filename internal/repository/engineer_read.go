@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func (r *Repository) ListEngineerAutotests(ctx context.Context, filter Filter, paging Paging) ([]Autotest, error) {
+func (r *AppRepository) ListEngineerAutotests(ctx context.Context, filter Filter, paging Paging) ([]Autotest, error) {
 	where, args, err := buildWhereClause(filter, &paging)
 	if err != nil {
 		return nil, fmt.Errorf("ListEngineerAutotests: %w", err)
@@ -30,7 +30,7 @@ func (r *Repository) ListEngineerAutotests(ctx context.Context, filter Filter, p
 	return autotests, rows.Err()
 }
 
-func (r *Repository) ListLeadAllCases(ctx context.Context, filter Filter, paging Paging) ([]TestCase, error) {
+func (r *AppRepository) ListLeadAllCases(ctx context.Context, filter Filter, paging Paging) ([]TestCase, error) {
 	where, args, err := buildWhereClause(filter, &paging)
 	if err != nil {
 		return nil, fmt.Errorf("ListLeadAllCases: %w", err)
@@ -55,7 +55,7 @@ func (r *Repository) ListLeadAllCases(ctx context.Context, filter Filter, paging
 	return testcases, rows.Err()
 }
 
-func (r *Repository) ListLeadAllResults(ctx context.Context, filter Filter, paging Paging) ([]TestResult, error) {
+func (r *AppRepository) ListLeadAllResults(ctx context.Context, filter Filter, paging Paging) ([]TestResult, error) {
 	where, args, err := buildWhereClause(filter, &paging)
 	if err != nil {
 		return nil, fmt.Errorf("ListLeadAllResults: %w", err)
@@ -80,7 +80,7 @@ func (r *Repository) ListLeadAllResults(ctx context.Context, filter Filter, pagi
 	return results, rows.Err()
 }
 
-func (r *Repository) ListActiveRuns(ctx context.Context, filter Filter, paging Paging) ([]ActiveRun, error) {
+func (r *AppRepository) ListActiveRuns(ctx context.Context, filter Filter, paging Paging) ([]ActiveRun, error) {
 	where, args, err := buildWhereClause(filter, &paging)
 	if err != nil {
 		return nil, fmt.Errorf("ListActiveRuns: %w", err)
@@ -105,7 +105,7 @@ func (r *Repository) ListActiveRuns(ctx context.Context, filter Filter, paging P
 	return runs, rows.Err()
 }
 
-func (r *Repository) ListRunSummaries(ctx context.Context, filter Filter, paging Paging) ([]RunSummary, error) {
+func (r *AppRepository) ListRunSummaries(ctx context.Context, filter Filter, paging Paging) ([]RunSummary, error) {
 	where, args, err := buildWhereClause(filter, &paging)
 	if err != nil {
 		return nil, fmt.Errorf("ListRunSummaries: %w", err)
@@ -130,7 +130,7 @@ func (r *Repository) ListRunSummaries(ctx context.Context, filter Filter, paging
 	return summs, rows.Err()
 }
 
-func (r *Repository) ListTestCaseStatistics(ctx context.Context, filter Filter, paging Paging) ([]CaseStats, error) {
+func (r *AppRepository) ListTestCaseStatistics(ctx context.Context, filter Filter, paging Paging) ([]CaseStats, error) {
 	where, args, err := buildWhereClause(filter, &paging)
 	if err != nil {
 		return nil, fmt.Errorf("ListTestCaseStatistics: %w", err)

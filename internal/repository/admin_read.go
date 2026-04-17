@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func (r *Repository) AdminListUsersAndRoles(ctx context.Context, filter Filter, paging Paging) ([]UserAdminView, error) {
+func (r *AppRepository) AdminListUsersAndRoles(ctx context.Context, filter Filter, paging Paging) ([]UserAdminView, error) {
 	where, args, err := buildWhereClause(filter, &paging)
 	if err != nil {
 		return nil, fmt.Errorf("AdminListUsersAndRoles: %w", err)

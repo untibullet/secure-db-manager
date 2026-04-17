@@ -2,7 +2,7 @@ package repository
 
 import "context"
 
-func (r *Repository) CreateRun(ctx context.Context, dto RunDTO) (int, error) {
+func (r *AppRepository) CreateRun(ctx context.Context, dto RunDTO) (int, error) {
 	sql := `INSERT INTO v_test_runs_manage (name, test_plan_id, version_id, env_config_id, tool_config_id, created_by, start_date, status)
             VALUES ($1, $2, $3, $4, $5, $6, NOW(), 'PLANNED') RETURNING test_run_id`
 	var id int
@@ -10,27 +10,26 @@ func (r *Repository) CreateRun(ctx context.Context, dto RunDTO) (int, error) {
 	return id, err
 }
 
-func (r *Repository) UpdateRunStatus(ctx context.Context, id int, status string) error {
+func (r *AppRepository) UpdateRunStatus(ctx context.Context, id int, status string) error {
 	sql := `UPDATE v_test_runs_manage SET status=$1 WHERE test_run_id=$2`
 	_, err := r.db.Exec(ctx, sql, status, id)
 	return err
 }
 
-func (r *Repository) DeleteRun(ctx context.Context, id int) error {
+func (r *AppRepository) DeleteRun(ctx context.Context, id int) error {
 	sql := `DELETE FROM v_test_runs_manage WHERE test_run_id=$1`
 	_, err := r.db.Exec(ctx, sql, id)
 	return err
 }
 
-func (r *Repository) AddRunItem(ctx context.Context, runID, testCaseID, order int) error {
+func (r *AppRepository) AddRunItem(ctx context.Context, runID, testCaseID, order int) error {
 	sql := `INSERT INTO v_test_run_items (test_run_id, test_case_id, execution_order) VALUES ($1, $2, $3)`
 	_, err := r.db.Exec(ctx, sql, runID, testCaseID, order)
 	return err
 }
 
-func (r *Repository) RemoveRunItem(ctx context.Context, itemID int) error {
-    sql := `DELETE FROM v_test_run_items WHERE run_item_id = $1`
-    _, err := r.db.Exec(ctx, sql, itemID)
-    return err
+func (r *AppRepository) RemoveRunItem(ctx context.Context, itemID int) error {
+	sql := `DELETE FROM v_test_run_items WHERE run_item_id = $1`
+	_, err := r.db.Exec(ctx, sql, itemID)
+	return err
 }
-
