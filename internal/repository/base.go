@@ -9,21 +9,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/untibullet/secure-db-manager/internal/domain"
 )
 
 // safeColRe допускает только snake_case идентификаторы.
-// Filter-ключи должны быть хардкодированными константами в репозитории —
-// никогда не передавать пользовательский ввод напрямую в Filter.
+// Ключи Filter должны быть хардкодированными константами — никогда не пользовательский ввод (AD-5).
 var safeColRe = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
-
-// Paging определяет параметры пагинации
-type Paging struct {
-	Limit  int
-	Offset int
-}
-
-// Filter - карта фильтров (ключ: колонка, значение: значение)
-type Filter map[string]any
 
 type DBTX interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
@@ -32,19 +23,15 @@ type DBTX interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
-// AppRepository - основная структура слоя данных
 type AppRepository struct {
-	db DBTX // Интерфейс, скрывающий *pgx.Conn, *pgxpool.Pool или pgx.Tx
+	db DBTX
 }
 
 func NewAppRepository(db DBTX) *AppRepository {
 	return &AppRepository{db: db}
 }
 
-// buildWhereClause строит WHERE-клаузу из фильтра.
-// ВАЖНО: ключи Filter должны быть хардкодированными строковыми литералами.
-// Передача пользовательского ввода в качестве ключа — программная ошибка; функция вернёт error.
-func buildWhereClause(filter Filter, paging *Paging) (string, []any, error) {
+func buildWhereClause(filter domain.Filter, paging *domain.Paging) (string, []any, error) {
 	var conditions []string
 	var args []any
 	idx := 1
@@ -78,7 +65,6 @@ func buildWhereClause(filter Filter, paging *Paging) (string, []any, error) {
 		if paging.Offset > 0 {
 			query += fmt.Sprintf(" OFFSET $%d", idx)
 			args = append(args, paging.Offset)
-			idx++
 		}
 	}
 

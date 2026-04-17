@@ -125,14 +125,15 @@ type UserAdminView struct {
 }
 
 type AuditEntry struct {
-	LogID      int            `json:"log_id"`
-	TableName  string         `json:"table_name"`
-	Operation  string         `json:"operation"`
-	RecordID   int            `json:"record_id"`
-	ChangedBy  string         `json:"changed_by"`
-	ChangedAt  time.Time      `json:"changed_at"`
-	OldValues  sql.NullString `json:"old_values"`
-	NewValues  sql.NullString `json:"new_values"`
+	AuditID   int            `json:"audit_id"`
+	TableName string         `json:"table_name"`
+	Operation string         `json:"operation"`
+	RecordID  int            `json:"record_id"`
+	UserID    sql.NullInt64  `json:"user_id"`
+	ChangedAt time.Time      `json:"changed_at"`
+	OldValues sql.NullString `json:"old_values"`
+	NewValues sql.NullString `json:"new_values"`
+	IPAddress sql.NullString `json:"ip_address"`
 }
 
 type RunSummary struct {
