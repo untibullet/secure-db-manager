@@ -151,3 +151,14 @@ type CaseStats struct {
 	PassRatePercent sql.NullFloat64 `json:"pass_rate_percent"`
 	AvgDurationMins sql.NullFloat64 `json:"avg_duration_minutes"`
 }
+
+// UserAuth используется исключительно при логине (AD-11).
+// Не передавать в логи — содержит password_hash.
+type UserAuth struct {
+	UserID             int
+	Username           string
+	PasswordHash       string
+	IsActive           bool
+	AccountLockedUntil *time.Time
+	RoleCode           string
+}

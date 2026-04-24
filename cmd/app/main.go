@@ -1,64 +1,92 @@
 package main
 
 import (
-	"html/template"
-	"io"
-	"log"
+	"context"
+	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	echomw "github.com/labstack/echo/v4/middleware"
+	"github.com/untibullet/secure-db-manager/internal/config"
+	"github.com/untibullet/secure-db-manager/internal/handler"
+	appmw "github.com/untibullet/secure-db-manager/internal/middleware"
+	"github.com/untibullet/secure-db-manager/internal/repository"
+	"github.com/untibullet/secure-db-manager/internal/service"
+	"github.com/untibullet/secure-db-manager/internal/session"
 )
 
-// TemplateRegistry подключает html/template к Echo
-type TemplateRegistry struct {
-	templates *template.Template
-}
-
-// Render реализует интерфейс echo.Renderer
-func (t *TemplateRegistry) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
-	return t.templates.ExecuteTemplate(w, name, data)
-}
-
 func main() {
-	e := echo.New()
+	log := slog.Default()
 
-	// 1. Мидлвары (логирование и восстановление после паники)
-	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
-
-	// 2. Настройка шаблонизатора
-	// Парсим все файлы .html из папки web/templates
-	templates, err := template.ParseGlob("web/templates/*.html")
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Ошибка загрузки шаблонов: %v", err)
-	}
-	e.Renderer = &TemplateRegistry{
-		templates: templates,
+		log.Error("config", "err", err)
+		os.Exit(1)
 	}
 
-	// 3. Раздача статики (CSS, JS)
-	// URL /static/... -> папка web/static
-	e.Static("/static", "web/static")
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	// 4. Роуты
+	// Суперпользовательский пул для DDL и логина (AD-10).
+	sysPool, err := pgxpool.New(ctx, cfg.SuperuserDSN())
+	if err != nil {
+		log.Error("sysPool connect", "err", err)
+		os.Exit(1)
+	}
+	defer sysPool.Close()
 
-	// Страница логина
-	e.GET("/login", func(c echo.Context) error {
-		return c.Render(http.StatusOK, "login.html", nil)
-	})
+	roleRepo := repository.NewRoleRepository(sysPool)
 
-	// Главная страница (защищенная зона - пока имитация)
-	e.GET("/", func(c echo.Context) error {
-		// В реальном приложении здесь была бы проверка сессии/куки
-		// username := c.QueryParam("username") // простая имитация передачи юзера
+	store := session.NewStore()
+	store.StartReaper(ctx, cfg.ReaperInterval)
 
-		data := map[string]interface{}{
-			"Title": "DB Explorer Dashboard",
+	// Сервисы.
+	authSvc := service.NewAuthService(store, cfg)
+	adminSvc := service.NewAdminService(roleRepo)
+
+	h := handler.New(
+		authSvc,
+		&service.TestPlanService{},
+		&service.TestCaseService{},
+		&service.RunService{},
+		&service.ResultService{},
+		&service.AutotestService{},
+		&service.ReferenceService{},
+		&service.StatsService{},
+		adminSvc,
+		roleRepo,
+		cfg.SessionTTL,
+	)
+
+	e := echo.New()
+	e.HideBanner = true
+	e.HTTPErrorHandler = handler.ErrorHandler
+
+	e.Use(appmw.RequestLogger(log))
+	e.Use(echomw.Recover())
+
+	authMW := appmw.Auth(cfg.JWTSecret, store)
+	h.Register(e, authMW)
+
+	// Graceful shutdown.
+	go func() {
+		if err := e.Start(cfg.ServerAddr); err != nil && err != http.ErrServerClosed {
+			log.Error("server", "err", err)
+			os.Exit(1)
 		}
-		return c.Render(http.StatusOK, "index.html", data)
-	})
+	}()
 
-	// 5. Запуск сервера
-	e.Logger.Fatal(e.Start(":8081"))
+	<-ctx.Done()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := e.Shutdown(shutdownCtx); err != nil {
+		log.Error("shutdown", "err", err)
+	}
+	log.Info("server stopped")
 }

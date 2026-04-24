@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-
-	"github.com/untibullet/secure-db-manager/internal/domain"
 )
 
 // AdminInsertUserRole записывает назначение роли в v_user_roles_manage и возвращает
@@ -64,21 +62,6 @@ func (r *AppRepository) AdminDeleteUserRole(ctx context.Context, userID, roleID 
 	}
 
 	return username, dbRoleName, tx.Commit(ctx)
-}
-
-// AdminCreateUser создаёт запись пользователя в v_users_manage и возвращает user_id.
-// Создание PostgreSQL-роли и установка пароля — отдельно через RoleRepository (AD-9, AD-10).
-func (r *AppRepository) AdminCreateUser(ctx context.Context, dto domain.CreateUserDTO) (int, error) {
-	var id int
-	err := r.db.QueryRow(ctx,
-		`INSERT INTO v_users_manage (username, email, full_name, is_active)
-		 VALUES ($1, $2, $3, TRUE) RETURNING user_id`,
-		dto.Username, dto.Email, dto.FullName,
-	).Scan(&id)
-	if err != nil {
-		return 0, fmt.Errorf("AdminCreateUser: %w", err)
-	}
-	return id, nil
 }
 
 func (r *AppRepository) AdminSetUserActive(ctx context.Context, userID int, isActive bool) error {

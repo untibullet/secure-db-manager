@@ -2,11 +2,13 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/untibullet/secure-db-manager/internal/domain"
 )
 
 // RoleRepository выполняет DDL-операции от имени суперпользователя (AD-9, AD-10).
@@ -94,6 +96,65 @@ func (s *RoleRepository) SetPasswordAndHash(ctx context.Context, userID int, use
 	}
 
 	return tx.Commit(ctx)
+}
+
+// GetUserForLogin возвращает данные, необходимые для аутентификации (AD-11).
+// Выполняется через суперпользовательский пул — единственный способ прочитать password_hash.
+func (s *RoleRepository) GetUserForLogin(ctx context.Context, username string) (*domain.UserAuth, error) {
+	sql := `
+		SELECT u.user_id, u.username, u.password_hash, u.is_active, u.account_locked_until,
+		       COALESCE(r.code, '') AS role_code
+		FROM users u
+		LEFT JOIN user_roles ur ON u.user_id = ur.user_id
+		    AND (ur.valid_until IS NULL OR ur.valid_until > NOW())
+		LEFT JOIN roles r ON ur.role_id = r.role_id
+		WHERE u.username = $1
+		ORDER BY ur.granted_at DESC NULLS LAST
+		LIMIT 1
+	`
+	var ua domain.UserAuth
+	err := s.pool.QueryRow(ctx, sql, username).Scan(
+		&ua.UserID, &ua.Username, &ua.PasswordHash,
+		&ua.IsActive, &ua.AccountLockedUntil, &ua.RoleCode,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("GetUserForLogin: %w", err)
+	}
+	return &ua, nil
+}
+
+// AdminCreateUser атомарно создаёт запись в таблице users и PostgreSQL login-роль (AD-10).
+// Не передавать bcryptHash и plainPassword в логи.
+func (s *RoleRepository) AdminCreateUser(ctx context.Context, dto domain.CreateUserDTO, bcryptHash string) (int, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("AdminCreateUser: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var userID int
+	err = tx.QueryRow(ctx,
+		`INSERT INTO users (username, email, full_name, is_active, password_hash)
+		 VALUES ($1, $2, $3, TRUE, $4) RETURNING user_id`,
+		dto.Username, dto.Email, dto.FullName, bcryptHash,
+	).Scan(&userID)
+	if err != nil {
+		return 0, fmt.Errorf("AdminCreateUser: insert user: %w", err)
+	}
+
+	createSQL := fmt.Sprintf(
+		"CREATE ROLE %s LOGIN PASSWORD '%s'",
+		pgx.Identifier{dto.Username}.Sanitize(),
+		escapePgLiteral(dto.Password),
+	)
+	if _, err = tx.Exec(ctx, createSQL); err != nil {
+		return 0, fmt.Errorf("AdminCreateUser: create role: %w", err)
+	}
+
+	return userID, tx.Commit(ctx)
 }
 
 // escapePgLiteral экранирует одинарные кавычки в строковых литералах PostgreSQL.
