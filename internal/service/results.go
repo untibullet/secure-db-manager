@@ -8,7 +8,7 @@ import (
 
 type ResultRepo interface {
 	ListLeadAllResults(ctx context.Context, filter domain.Filter, paging domain.Paging) ([]domain.TestResult, error)
-	ListPublicResults(ctx context.Context, filter domain.Filter, paging domain.Paging) ([]domain.PublicResult, error)
+	ListTesterResults(ctx context.Context, filter domain.Filter, paging domain.Paging) ([]domain.PublicResult, error)
 	GetLeadResultByID(ctx context.Context, id int) (*domain.TestResult, error)
 	GetTesterResultByID(ctx context.Context, id int) (*domain.PublicResult, error)
 	CreateResult(ctx context.Context, dto domain.ResultDTO) (int, error)
@@ -21,10 +21,10 @@ type ResultRepo interface {
 type ResultService struct{}
 
 // ListByRole возвращает результаты с учётом прав доступа по роли (AD-4).
-// TESTER видит только собственные данные без run_name/executor.
+// TESTER видит только собственные данные через v_tester_my_results (RLS по CURRENT_USER).
 func (s *ResultService) ListByRole(ctx context.Context, repo ResultRepo, filter domain.Filter, paging domain.Paging, dbRole string) (any, error) {
 	if dbRole == "TESTER" {
-		return repo.ListPublicResults(ctx, filter, paging)
+		return repo.ListTesterResults(ctx, filter, paging)
 	}
 	return repo.ListLeadAllResults(ctx, filter, paging)
 }

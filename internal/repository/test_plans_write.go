@@ -16,7 +16,7 @@ func (r *AppRepository) CreateTestPlan(ctx context.Context, dto domain.TestPlanD
 		dto.AcceptanceCriteria, dto.OwnerID, dto.Status,
 	).Scan(&id)
 	if err != nil {
-		return 0, fmt.Errorf("CreateTestPlan: %w", err)
+		return 0, fmt.Errorf("CreateTestPlan: %w", mapRepoError(err))
 	}
 	return id, nil
 }
@@ -29,7 +29,7 @@ func (r *AppRepository) UpdateTestPlan(ctx context.Context, id int, dto domain.T
 		dto.AcceptanceCriteria, dto.Status, id,
 	)
 	if err != nil {
-		return fmt.Errorf("UpdateTestPlan: %w", err)
+		return fmt.Errorf("UpdateTestPlan: %w", mapRepoError(err))
 	}
 	return nil
 }
@@ -37,7 +37,7 @@ func (r *AppRepository) UpdateTestPlan(ctx context.Context, id int, dto domain.T
 func (r *AppRepository) DeleteTestPlan(ctx context.Context, id int) error {
 	_, err := r.db.Exec(ctx, `DELETE FROM v_test_plans_manage WHERE test_plan_id=$1`, id)
 	if err != nil {
-		return fmt.Errorf("DeleteTestPlan: %w", err)
+		return fmt.Errorf("DeleteTestPlan: %w", mapRepoError(err))
 	}
 	return nil
 }

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -11,6 +12,16 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/untibullet/secure-db-manager/internal/domain"
 )
+
+// mapRepoError преобразует PG-ошибку 42501 (insufficient_privilege) в domain.ErrForbidden.
+// Применяется в write-методах, работающих через view с привилегиями по роли.
+func mapRepoError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "42501" {
+		return domain.ErrForbidden
+	}
+	return err
+}
 
 // safeColRe допускает только snake_case идентификаторы.
 // Ключи Filter должны быть хардкодированными константами — никогда не пользовательский ввод (AD-5).

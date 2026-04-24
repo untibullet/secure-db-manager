@@ -6,18 +6,28 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
 	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/untibullet/secure-db-manager/internal/config"
+	"github.com/untibullet/secure-db-manager/internal/handler"
+	appmw "github.com/untibullet/secure-db-manager/internal/middleware"
+	"github.com/untibullet/secure-db-manager/internal/repository"
+	"github.com/untibullet/secure-db-manager/internal/service"
+	"github.com/untibullet/secure-db-manager/internal/session"
 )
 
 const (
@@ -25,12 +35,19 @@ const (
 	pgDB       = "testdb"
 	pgUser     = "postgres"
 	pgPassword = "postgres"
+
+	testJWTSecret = "integration-test-jwt-secret-key!"
 )
 
 // Package-level state shared across all integration test files.
 var (
-	superConn    *pgx.Conn
-	containerDSN string
+	superConn     *pgx.Conn
+	containerDSN  string
+	containerHost string
+	containerPort string
+	sysPool       *pgxpool.Pool
+	testStore     *session.Store
+	testServerURL string
 
 	testLeadUserID int
 	testerAUserID  int
@@ -54,85 +71,124 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	os.Exit(runAll(m))
-}
-
-func runAll(m *testing.M) int {
 	ctx := context.Background()
 
+	os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true") //nolint:errcheck
+
 	// 1. Start postgres container.
-	req := testcontainers.ContainerRequest{
-		Image:        pgImage,
-		ExposedPorts: []string{"5432/tcp"},
-		Env: map[string]string{
-			"POSTGRES_USER":     pgUser,
-			"POSTGRES_PASSWORD": pgPassword,
-			"POSTGRES_DB":       pgDB,
-		},
-		WaitingFor: wait.ForListeningPort("5432/tcp"),
-	}
 	ctr, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image:        pgImage,
+			ExposedPorts: []string{"5432/tcp"},
+			Env: map[string]string{
+				"POSTGRES_USER":     pgUser,
+				"POSTGRES_PASSWORD": pgPassword,
+				"POSTGRES_DB":       pgDB,
+			},
+			WaitingFor: wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(60 * time.Second),
+		},
+		Started: true,
 	})
 	if err != nil {
-		log.Printf("start container: %v", err)
-		return 1
+		panic("start container: " + err.Error())
 	}
 	defer ctr.Terminate(ctx) //nolint:errcheck
 
 	host, err := ctr.Host(ctx)
 	if err != nil {
-		log.Printf("container host: %v", err)
-		return 1
+		panic("container host: " + err.Error())
 	}
 	port, err := ctr.MappedPort(ctx, "5432")
 	if err != nil {
-		log.Printf("container port: %v", err)
-		return 1
+		panic("container port: " + err.Error())
 	}
+	containerHost = host
+	containerPort = port.Port()
 	containerDSN = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
 		pgUser, pgPassword, host, port.Port(), pgDB)
 
 	// 2. Apply migrations via goose.
 	sqlDB, err := sql.Open("pgx", containerDSN)
 	if err != nil {
-		log.Printf("sql.Open: %v", err)
-		return 1
+		panic("sql.Open: " + err.Error())
 	}
 	_, thisFile, _, _ := runtime.Caller(0)
 	migrationsDir := filepath.Join(filepath.Dir(thisFile), "../../db/migrations")
 	if err := goose.SetDialect("postgres"); err != nil {
-		log.Printf("goose dialect: %v", err)
-		return 1
+		panic("goose dialect: " + err.Error())
 	}
 	if err := goose.Up(sqlDB, migrationsDir); err != nil {
-		log.Printf("goose up: %v", err)
-		return 1
+		panic("goose up: " + err.Error())
 	}
-	sqlDB.Close()
+	sqlDB.Close() //nolint:errcheck
 
-	// 3. Open superuser connection.
+	// 3. Open superuser connection and pool.
 	superConn, err = pgx.Connect(ctx, containerDSN)
 	if err != nil {
-		log.Printf("superuser connect: %v", err)
-		return 1
+		panic("superuser connect: " + err.Error())
 	}
 	defer superConn.Close(ctx) //nolint:errcheck
 
-	// 4. Set up fixtures and run tests.
+	sysPool, err = pgxpool.New(ctx, containerDSN)
+	if err != nil {
+		panic("sysPool: " + err.Error())
+	}
+	defer sysPool.Close()
+
+	// 4. Set up fixtures.
 	if err := setupFixtures(ctx); err != nil {
-		log.Printf("setupFixtures: %v", err)
-		return 1
+		panic("setupFixtures: " + err.Error())
 	}
 	defer cleanup(ctx)
 
-	return m.Run()
+	// 5. Start test HTTP server.
+	srv, err := setupTestServer()
+	if err != nil {
+		panic("setupTestServer: " + err.Error())
+	}
+	defer srv.Close()
+	testServerURL = srv.URL
+
+	os.Exit(m.Run())
+}
+
+// setupTestServer wires up the full application stack against the test container.
+func setupTestServer() (*httptest.Server, error) {
+	testStore = session.NewStore()
+	cfg := &config.Config{
+		DBHost:        containerHost,
+		DBPort:        containerPort,
+		DBName:        pgDB,
+		SuperuserUser: pgUser,
+		SuperuserPass: pgPassword,
+		JWTSecret:     testJWTSecret,
+		SessionTTL:    time.Hour,
+	}
+	roleRepo := repository.NewRoleRepository(sysPool)
+	h := handler.New(
+		service.NewAuthService(testStore, cfg),
+		&service.TestPlanService{},
+		&service.TestCaseService{},
+		&service.RunService{},
+		&service.ResultService{},
+		&service.AutotestService{},
+		&service.ReferenceService{},
+		&service.StatsService{},
+		service.NewAdminService(roleRepo),
+		roleRepo,
+		cfg.SessionTTL,
+	)
+	e := echo.New()
+	e.HideBanner = true
+	e.HTTPErrorHandler = handler.ErrorHandler
+	h.Register(e, appmw.Auth(cfg.JWTSecret, testStore))
+	return httptest.NewServer(e), nil
 }
 
 // setupFixtures creates pg login roles and inserts all business data needed by tests.
 func setupFixtures(ctx context.Context) error {
-	// --- bcrypt hashes (MinCost for speed) ---
 	type testUser struct {
 		username string
 		password string
@@ -152,34 +208,51 @@ func setupFixtures(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("bcrypt %s: %w", u.username, err)
 		}
-
-		// Create pg login role.
 		if _, err := superConn.Exec(ctx,
 			fmt.Sprintf("CREATE ROLE %s LOGIN PASSWORD '%s'", u.username, u.password),
 		); err != nil {
 			return fmt.Errorf("CREATE ROLE %s: %w", u.username, err)
 		}
-		// Grant group role.
 		if _, err := superConn.Exec(ctx,
 			fmt.Sprintf("GRANT %s TO %s", u.pgGroup, u.username),
 		); err != nil {
 			return fmt.Errorf("GRANT %s TO %s: %w", u.pgGroup, u.username, err)
 		}
-
-		// Insert user row; username must match pg login role name (AD-11).
 		if err := superConn.QueryRow(ctx,
 			`INSERT INTO users (username, password_hash, email, full_name, is_active)
 			 VALUES ($1, $2, $3, $4, TRUE) RETURNING user_id`,
-			u.username,
-			string(hash),
-			u.username+"@test.local",
-			u.username,
+			u.username, string(hash), u.username+"@test.local", u.username,
 		).Scan(u.idPtr); err != nil {
 			return fmt.Errorf("INSERT user %s: %w", u.username, err)
 		}
 	}
 
-	// --- Reference data IDs ---
+	// Assign application roles so GetUserForLogin returns the correct RoleCode.
+	type roleAssign struct {
+		userIDPtr *int
+		code      string
+	}
+	for _, ra := range []roleAssign{
+		{&testLeadUserID, "TEST_LEAD"},
+		{&testerAUserID, "TESTER"},
+		{&testerBUserID, "TESTER"},
+		{&adminUserID, "ADMIN"},
+	} {
+		var roleID int
+		if err := superConn.QueryRow(ctx,
+			`SELECT role_id FROM roles WHERE code = $1`, ra.code,
+		).Scan(&roleID); err != nil {
+			return fmt.Errorf("query role %s: %w", ra.code, err)
+		}
+		if _, err := superConn.Exec(ctx,
+			`INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)`,
+			*ra.userIDPtr, roleID,
+		); err != nil {
+			return fmt.Errorf("user_roles %s: %w", ra.code, err)
+		}
+	}
+
+	// Reference data.
 	if err := superConn.QueryRow(ctx,
 		`SELECT priority_id FROM priorities WHERE code = 'CRITICAL'`,
 	).Scan(&priorityID); err != nil {
@@ -196,7 +269,6 @@ func setupFixtures(ctx context.Context) error {
 		return fmt.Errorf("query IN_PROGRESS status: %w", err)
 	}
 
-	// --- App version, env config, tool config ---
 	var versionID, envConfigID, toolConfigID int
 	if err := superConn.QueryRow(ctx,
 		`INSERT INTO app_versions (version_string) VALUES ('1.0.0') RETURNING version_id`,
@@ -214,7 +286,6 @@ func setupFixtures(ctx context.Context) error {
 		return fmt.Errorf("INSERT tool_configs: %w", err)
 	}
 
-	// --- Test plan ---
 	if err := superConn.QueryRow(ctx,
 		`INSERT INTO test_plans (name, priority_id, start_date, end_date, owner_user_id, status)
 		 VALUES ('Integration Test Plan', $1, CURRENT_DATE, CURRENT_DATE+1, $2, 'DRAFT')
@@ -224,7 +295,6 @@ func setupFixtures(ctx context.Context) error {
 		return fmt.Errorf("INSERT test_plans: %w", err)
 	}
 
-	// --- Test cases ---
 	if err := superConn.QueryRow(ctx,
 		`INSERT INTO test_cases (name, priority_id, owner_user_id)
 		 VALUES ('Test Case Alpha', $1, $2) RETURNING test_case_id`,
@@ -240,7 +310,6 @@ func setupFixtures(ctx context.Context) error {
 		return fmt.Errorf("INSERT test_case 2: %w", err)
 	}
 
-	// --- Test run ---
 	if err := superConn.QueryRow(ctx,
 		`INSERT INTO test_runs (test_plan_id, env_config_id, tool_config_id, version_id,
 		  name, start_date, created_by)
@@ -250,7 +319,6 @@ func setupFixtures(ctx context.Context) error {
 		return fmt.Errorf("INSERT test_runs: %w", err)
 	}
 
-	// --- Run items ---
 	if err := superConn.QueryRow(ctx,
 		`INSERT INTO test_run_items (test_run_id, test_case_id, execution_order)
 		 VALUES ($1, $2, 1) RETURNING run_item_id`,
@@ -266,8 +334,7 @@ func setupFixtures(ctx context.Context) error {
 		return fmt.Errorf("INSERT run_item 2: %w", err)
 	}
 
-	// --- Test results ---
-	// resultAID: tester_a executed, PASSED (final)
+	// resultAID: tester_a, PASSED (final)
 	if err := superConn.QueryRow(ctx,
 		`INSERT INTO test_results (run_item_id, status_id, executor_user_id)
 		 VALUES ($1, $2, $3) RETURNING test_result_id`,
@@ -275,7 +342,7 @@ func setupFixtures(ctx context.Context) error {
 	).Scan(&resultAID); err != nil {
 		return fmt.Errorf("INSERT resultA: %w", err)
 	}
-	// resultBID: tester_b executed, PASSED (final)
+	// resultBID: tester_b, PASSED (final)
 	if err := superConn.QueryRow(ctx,
 		`INSERT INTO test_results (run_item_id, status_id, executor_user_id)
 		 VALUES ($1, $2, $3) RETURNING test_result_id`,
@@ -283,7 +350,7 @@ func setupFixtures(ctx context.Context) error {
 	).Scan(&resultBID); err != nil {
 		return fmt.Errorf("INSERT resultB: %w", err)
 	}
-	// nonFinalResultID: tester_a executed, IN_PROGRESS (non-final) – invisible to guests
+	// nonFinalResultID: tester_a, IN_PROGRESS (non-final)
 	if err := superConn.QueryRow(ctx,
 		`INSERT INTO test_results (run_item_id, status_id, executor_user_id)
 		 VALUES ($1, $2, $3) RETURNING test_result_id`,
@@ -305,13 +372,17 @@ func cleanup(ctx context.Context) {
 		`DELETE FROM test_run_items WHERE run_item_id = ANY($1)`,
 		[]int{runItemID1, runItemID2},
 	)
-	superConn.Exec(ctx, "DELETE FROM test_runs WHERE test_run_id = $1", testRunID)        //nolint:errcheck
-	superConn.Exec(ctx, "DELETE FROM test_cases WHERE test_case_id = $1", testCaseID1)    //nolint:errcheck
-	superConn.Exec(ctx, "DELETE FROM test_cases WHERE test_case_id = $1", testCaseID2)    //nolint:errcheck
-	superConn.Exec(ctx, "DELETE FROM test_plans WHERE test_plan_id = $1", testPlanID)     //nolint:errcheck
-	superConn.Exec(ctx, "DELETE FROM tool_configs WHERE name = 'test-tool'")              //nolint:errcheck
-	superConn.Exec(ctx, "DELETE FROM env_configs WHERE name = 'test-env'")                //nolint:errcheck
-	superConn.Exec(ctx, "DELETE FROM app_versions WHERE version_string = '1.0.0'")        //nolint:errcheck
+	superConn.Exec(ctx, "DELETE FROM test_runs WHERE test_run_id = $1", testRunID)     //nolint:errcheck
+	superConn.Exec(ctx, "DELETE FROM test_cases WHERE test_case_id = $1", testCaseID1) //nolint:errcheck
+	superConn.Exec(ctx, "DELETE FROM test_cases WHERE test_case_id = $1", testCaseID2) //nolint:errcheck
+	superConn.Exec(ctx, "DELETE FROM test_plans WHERE test_plan_id = $1", testPlanID)  //nolint:errcheck
+	superConn.Exec(ctx, "DELETE FROM tool_configs WHERE name = 'test-tool'")           //nolint:errcheck
+	superConn.Exec(ctx, "DELETE FROM env_configs WHERE name = 'test-env'")             //nolint:errcheck
+	superConn.Exec(ctx, "DELETE FROM app_versions WHERE version_string = '1.0.0'")     //nolint:errcheck
+	superConn.Exec(ctx, //nolint:errcheck
+		`DELETE FROM user_roles WHERE user_id = ANY($1)`,
+		[]int{testLeadUserID, testerAUserID, testerBUserID, adminUserID, guestUserID},
+	)
 	superConn.Exec(ctx, //nolint:errcheck
 		`DELETE FROM users WHERE user_id = ANY($1)`,
 		[]int{testLeadUserID, testerAUserID, testerBUserID, adminUserID, guestUserID},

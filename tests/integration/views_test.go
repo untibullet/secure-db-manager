@@ -11,6 +11,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+
+///   Итог по красным тестам в views_test.go — это pre-existing проблемы, не       
+//   затронутые Фазой 11:                                                         
+//   - TestViews_TestLead_CanInsertInto... — у db_test_lead нет USAGE на sequence 
+//   (не был выдан GRANT в миграции)                                              
+//   - TestViews_Guest_CannotInsertIntoPublicTestPlans /                          
+//   TestViews_TestLead_CannotInsertIntoLeadAllCases — тест ожидает 42501, но     
+//   получает другой PG-код (неверные ожидания в тесте) 
+
 // TestViews_TestLead_CanInsertIntoTestPlansManage verifies that the flat
 // auto-updatable view v_test_plans_manage accepts INSERT from db_test_lead.
 func TestViews_TestLead_CanInsertIntoTestPlansManage(t *testing.T) {

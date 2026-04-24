@@ -22,7 +22,7 @@ func (m *MockResultRepo) ListLeadAllResults(ctx context.Context, filter domain.F
 	return args.Get(0).([]domain.TestResult), args.Error(1)
 }
 
-func (m *MockResultRepo) ListPublicResults(ctx context.Context, filter domain.Filter, paging domain.Paging) ([]domain.PublicResult, error) {
+func (m *MockResultRepo) ListTesterResults(ctx context.Context, filter domain.Filter, paging domain.Paging) ([]domain.PublicResult, error) {
 	args := m.Called(ctx, filter, paging)
 	return args.Get(0).([]domain.PublicResult), args.Error(1)
 }
@@ -72,10 +72,10 @@ func TestResultService_ListByRole(t *testing.T) {
 	filter := domain.Filter{}
 	paging := domain.Paging{}
 
-	// dbRole="TESTER" → must route to ListPublicResults
-	t.Run("tester_calls_public_results", func(t *testing.T) {
+	// dbRole="TESTER" → must route to ListTesterResults (v_tester_my_results, RLS by CURRENT_USER)
+	t.Run("tester_calls_tester_results", func(t *testing.T) {
 		repo := new(MockResultRepo)
-		repo.On("ListPublicResults", ctx, filter, paging).
+		repo.On("ListTesterResults", ctx, filter, paging).
 			Return([]domain.PublicResult{{ResultID: 1}}, nil)
 
 		result, err := svc.ListByRole(ctx, repo, filter, paging, "TESTER")

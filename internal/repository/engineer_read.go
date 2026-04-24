@@ -168,6 +168,31 @@ func (r *AppRepository) GetLeadResultByID(ctx context.Context, id int) (*domain.
 	return &tr, nil
 }
 
+func (r *AppRepository) ListTesterResults(ctx context.Context, filter domain.Filter, paging domain.Paging) ([]domain.PublicResult, error) {
+	where, args, err := buildWhereClause(filter, &paging)
+	if err != nil {
+		return nil, fmt.Errorf("ListTesterResults: %w", err)
+	}
+	sql := `SELECT test_result_id, test_run_id, test_case_name, status, execution_date
+	        FROM v_tester_my_results` + where
+
+	rows, err := r.db.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("ListTesterResults: %w", err)
+	}
+	defer rows.Close()
+
+	var results []domain.PublicResult
+	for rows.Next() {
+		var tr domain.PublicResult
+		if err := rows.Scan(&tr.ResultID, &tr.RunID, &tr.TestCaseName, &tr.Status, &tr.ExecutionDate); err != nil {
+			return nil, fmt.Errorf("ListTesterResults: %w", err)
+		}
+		results = append(results, tr)
+	}
+	return results, rows.Err()
+}
+
 // GetTesterResultByID возвращает результат через v_tester_my_results (RLS: только свои данные).
 func (r *AppRepository) GetTesterResultByID(ctx context.Context, id int) (*domain.PublicResult, error) {
 	sql := `SELECT test_result_id, test_run_id, test_case_name, status, execution_date
