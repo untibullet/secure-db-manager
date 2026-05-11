@@ -70,8 +70,21 @@ func main() {
 	e.Use(appmw.RequestLogger(log))
 	e.Use(echomw.Recover())
 
+	e.Static("/static", "web/static")
+	e.GET("/", func(c echo.Context) error { return c.File("web/templates/index.html") })
+	e.GET("/login", func(c echo.Context) error { return c.File("web/templates/login.html") })
+
 	authMW := appmw.Auth(cfg.JWTSecret, store)
 	h.Register(e, authMW)
+
+	// SPA fallback: любой GET без совпадения с API-маршрутом отдаёт index.html,
+	// чтобы прямая навигация по URL работала в браузере.
+	e.RouteNotFound("/*", func(c echo.Context) error {
+		if c.Request().Method == http.MethodGet {
+			return c.File("web/templates/index.html")
+		}
+		return echo.ErrNotFound
+	})
 
 	// Graceful shutdown.
 	go func() {

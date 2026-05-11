@@ -185,3 +185,20 @@ body {
 .form-group label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 0.9rem; }
 .form-group input { width: 100%; box-sizing: border-box; }
 .empty-state { padding: 20px; text-align: center; color: var(--text-secondary); font-style: italic; }
+
+/* Pagination */
+.pagination-bar { display: flex; align-items: center; gap: 12px; padding: 10px 4px; }
+.page-info { color: var(--text-secondary); font-size: 0.875rem; flex: 1; text-align: center; }
+
+/* Sub-table (expanded rows) */
+.sub-row td { padding: 0; background: #f8fafc; border-bottom: 2px solid var(--border-color); }
+.sub-cell { padding: 0; }
+.expand-toggle { color: var(--text-secondary); font-size: 0.75rem; }
+.data-row.row-expanded > td { background: #eff6ff; }
+
+/* Modal error */
+.modal-error { color: var(--danger-color); padding: 0 20px 8px; font-size: 0.875rem; min-height: 20px; }
+
+/* Action buttons in table rows */
+.row-actions { white-space: nowrap; text-align: right; }
+.row-actions .btn-xs { margin-left: 4px; }

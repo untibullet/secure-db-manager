@@ -17,7 +17,7 @@ import (
 func loginAs(t *testing.T, username, password string) string {
 	t.Helper()
 	body := fmt.Sprintf(`{"username":%q,"password":%q}`, username, password)
-	resp, err := http.Post(testServerURL+"/auth/login", "application/json", bytes.NewBufferString(body))
+	resp, err := http.Post(testServerURL+"/api/auth/login", "application/json", bytes.NewBufferString(body))
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode, "loginAs: unexpected status for %s", username)
@@ -33,7 +33,7 @@ func loginAs(t *testing.T, username, password string) string {
 // TestAPI_Login_Returns200AndJWT verifies the happy path of POST /auth/login (E2E).
 func TestAPI_Login_Returns200AndJWT(t *testing.T) {
 	body := `{"username":"tester_a","password":"testerapass"}`
-	resp, err := http.Post(testServerURL+"/auth/login", "application/json", bytes.NewBufferString(body))
+	resp, err := http.Post(testServerURL+"/api/auth/login", "application/json", bytes.NewBufferString(body))
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -47,7 +47,7 @@ func TestAPI_Login_Returns200AndJWT(t *testing.T) {
 
 // TestAPI_TestPlans_NoAuth_Returns401 verifies that GET /test-plans without a JWT returns 401.
 func TestAPI_TestPlans_NoAuth_Returns401(t *testing.T) {
-	resp, err := http.Get(testServerURL + "/test-plans")
+	resp, err := http.Get(testServerURL + "/api/test-plans")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -59,7 +59,7 @@ func TestAPI_TestPlans_NoAuth_Returns401(t *testing.T) {
 func TestAPI_Results_TesterSeesOwnOnly(t *testing.T) {
 	token := loginAs(t, "tester_a", "testerapass")
 
-	req, err := http.NewRequest(http.MethodGet, testServerURL+"/results", nil)
+	req, err := http.NewRequest(http.MethodGet, testServerURL+"/api/results", nil)
 	require.NoError(t, err)
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -91,7 +91,7 @@ func TestAPI_TestPlans_TesterCreate_Returns403(t *testing.T) {
 	token := loginAs(t, "tester_a", "testerapass")
 
 	body := `{"name":"Forbidden Plan"}`
-	req, err := http.NewRequest(http.MethodPost, testServerURL+"/test-plans", bytes.NewBufferString(body))
+	req, err := http.NewRequest(http.MethodPost, testServerURL+"/api/test-plans", bytes.NewBufferString(body))
 	require.NoError(t, err)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")

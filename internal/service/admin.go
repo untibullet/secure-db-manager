@@ -28,6 +28,7 @@ type AdminRoleRepo interface {
 	GrantGroupRole(ctx context.Context, username, dbRoleName string) error
 	RevokeGroupRole(ctx context.Context, username, dbRoleName string) error
 	SetPasswordAndHash(ctx context.Context, userID int, username, bcryptHash, plainPassword string) error
+	ListAvailableRoles(ctx context.Context) ([]domain.Role, error)
 }
 
 // AdminService синглтон: roleRepo инжектируется при старте (AD-9).
@@ -99,4 +100,8 @@ func (s *AdminService) RevokeRole(ctx context.Context, repo AdminAppRepo, userID
 
 func (s *AdminService) AuditLog(ctx context.Context, repo AdminAppRepo, filter domain.Filter, paging domain.Paging) ([]domain.AuditEntry, error) {
 	return repo.AdminListAuditLog(ctx, filter, paging)
+}
+
+func (s *AdminService) ListRoles(ctx context.Context) ([]domain.Role, error) {
+	return s.roles.ListAvailableRoles(ctx)
 }

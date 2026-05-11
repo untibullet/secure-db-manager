@@ -49,19 +49,22 @@ func New(
 }
 
 // Register регистрирует все маршруты согласно api.yaml.
-// authMW создаётся вызывающей стороной через middleware.Auth(secret, store).
+// Все API-маршруты живут под /api/, страницы SPA — на корне (обслуживаются main.go).
 func (h *Handlers) Register(e *echo.Echo, authMW echo.MiddlewareFunc) {
-	e.POST("/auth/login", h.Login)
-	e.POST("/auth/logout", h.Logout, authMW)
+	api := e.Group("/api")
 
-	plans := e.Group("/test-plans", authMW)
+	api.POST("/auth/login", h.Login)
+	api.POST("/auth/logout", h.Logout, authMW)
+	api.GET("/auth/me", h.Me, authMW)
+
+	plans := api.Group("/test-plans", authMW)
 	plans.GET("", h.ListTestPlans)
 	plans.POST("", h.CreateTestPlan)
 	plans.GET("/:id", h.GetTestPlan)
 	plans.PUT("/:id", h.UpdateTestPlan)
 	plans.DELETE("/:id", h.DeleteTestPlan)
 
-	cases := e.Group("/test-cases", authMW)
+	cases := api.Group("/test-cases", authMW)
 	cases.GET("", h.ListTestCases)
 	cases.POST("", h.CreateTestCase)
 	cases.GET("/:id", h.GetTestCase)
@@ -72,7 +75,7 @@ func (h *Handlers) Register(e *echo.Echo, authMW echo.MiddlewareFunc) {
 	cases.PUT("/:id/steps/:stepId", h.UpdateStep)
 	cases.DELETE("/:id/steps/:stepId", h.DeleteStep)
 
-	r := e.Group("/runs", authMW)
+	r := api.Group("/runs", authMW)
 	r.GET("", h.ListRuns)
 	r.POST("", h.CreateRun)
 	r.GET("/:id", h.GetRun)
@@ -82,7 +85,7 @@ func (h *Handlers) Register(e *echo.Echo, authMW echo.MiddlewareFunc) {
 	r.POST("/:id/items", h.AddRunItem)
 	r.DELETE("/:id/items/:itemId", h.DeleteRunItem)
 
-	res := e.Group("/results", authMW)
+	res := api.Group("/results", authMW)
 	res.GET("", h.ListResults)
 	res.POST("", h.CreateResult)
 	res.GET("/:id", h.GetResult)
@@ -91,22 +94,23 @@ func (h *Handlers) Register(e *echo.Echo, authMW echo.MiddlewareFunc) {
 	res.GET("/:id/artifacts", h.ListArtifacts)
 	res.POST("/:id/artifacts", h.AddArtifact)
 
-	at := e.Group("/autotests", authMW)
+	at := api.Group("/autotests", authMW)
 	at.GET("", h.ListAutotests)
 	at.POST("", h.CreateAutotest)
 	at.GET("/:id", h.GetAutotest)
 	at.PUT("/:id", h.UpdateAutotest)
 	at.DELETE("/:id", h.DeleteAutotest)
+	at.GET("/:id/versions", h.ListVersions)
 	at.POST("/:id/versions", h.AddVersion)
 
-	e.GET("/environments", h.ListEnvironments, authMW)
-	e.GET("/reports", h.ListReports, authMW)
+	api.GET("/environments", h.ListEnvironments, authMW)
+	api.GET("/reports", h.ListReports, authMW)
 
-	st := e.Group("/stats", authMW)
+	st := api.Group("/stats", authMW)
 	st.GET("/runs", h.RunSummaries)
 	st.GET("/cases", h.CaseStats)
 
-	adm := e.Group("/admin", authMW)
+	adm := api.Group("/admin", authMW)
 	adm.GET("/users", h.ListUsers)
 	adm.POST("/users", h.CreateUser)
 	adm.GET("/users/:id", h.GetUser)
@@ -114,6 +118,7 @@ func (h *Handlers) Register(e *echo.Echo, authMW echo.MiddlewareFunc) {
 	adm.PATCH("/users/:id/lock", h.SetLock)
 	adm.POST("/users/:id/roles", h.AssignRole)
 	adm.DELETE("/users/:id/roles/:roleId", h.RevokeRole)
+	adm.GET("/roles", h.ListRoles)
 	adm.GET("/audit-log", h.AuditLog)
 }
 

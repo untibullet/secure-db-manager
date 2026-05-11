@@ -152,6 +152,12 @@ type CaseStats struct {
 	AvgDurationMins sql.NullFloat64 `json:"avg_duration_minutes"`
 }
 
+type Role struct {
+	ID   int    `json:"role_id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
 // UserAuth используется исключительно при логине (AD-11).
 // Не передавать в логи — содержит password_hash.
 type UserAuth struct {

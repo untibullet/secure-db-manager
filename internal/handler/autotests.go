@@ -87,6 +87,22 @@ func (h *Handlers) DeleteAutotest(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+func (h *Handlers) ListVersions(c echo.Context) error {
+	id, err := pathInt(c, "id")
+	if err != nil {
+		return err
+	}
+	ctx := c.Request().Context()
+	versions, err := h.autotests.ListVersions(ctx, appRepo(c), id)
+	if err != nil {
+		return httpErr(err)
+	}
+	if versions == nil {
+		versions = []domain.AutotestVersion{}
+	}
+	return c.JSON(http.StatusOK, versions)
+}
+
 func (h *Handlers) AddVersion(c echo.Context) error {
 	id, err := pathInt(c, "id")
 	if err != nil {

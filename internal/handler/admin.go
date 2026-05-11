@@ -152,6 +152,18 @@ func (h *Handlers) RevokeRole(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+func (h *Handlers) ListRoles(c echo.Context) error {
+	ctx := c.Request().Context()
+	roles, err := h.admin.ListRoles(ctx)
+	if err != nil {
+		return httpErr(err)
+	}
+	if roles == nil {
+		roles = []domain.Role{}
+	}
+	return c.JSON(http.StatusOK, roles)
+}
+
 func (h *Handlers) AuditLog(c echo.Context) error {
 	paging := parsePaging(c)
 	filter := domain.Filter{}

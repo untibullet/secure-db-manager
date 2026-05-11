@@ -4,61 +4,55 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="/static/styles.css">
-  <title>DB Explorer (Mock)</title>
+  <title>Secure DB Manager</title>
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">DB Explorer</div>
+    <div class="brand">Secure DB Manager</div>
     <div class="userbox">
-      <span id="currentUser">mock: ivan_ivanov</span>
-      <a href="/login" class="logout-link">Выйти</a>
+      <span id="currentUser"></span>
+      <a href="#" id="logoutLink" class="logout-link">Выйти</a>
     </div>
   </header>
 
   <main class="layout">
     <section class="sidebar">
-      <h3>Таблицы</h3>
-      <div id="tablesList" class="tablesList"></div>
+      <h3>Разделы</h3>
+      <div id="tablesList"></div>
     </section>
 
     <section class="content">
       <div class="panel-header">
-        <h3 id="activeTitle">Таблица: —</h3>
+        <h3 id="activeTitle">—</h3>
       </div>
-      
-      <!-- Панель инструментов для активной таблицы -->
-      <div class="toolbar" id="mainToolbar">
-        <button class="btn btn-primary" onclick="openModal('CREATE')">+ Создать запись</button>
+      <div id="toolbar" class="toolbar" style="display:none">
+        <div id="toolbarFilters" class="toolbar-group"></div>
         <div class="toolbar-group">
-            <select class="input-select" id="sortSelect" onchange="applySort()">
-                <option value="asc">Сортировка: А-Я</option>
-                <option value="desc">Сортировка: Я-А</option>
-            </select>
-            <input type="text" class="input-text" id="filterInput" placeholder="Фильтр..." oninput="applyFilter()">
+          <button id="btnCreate" class="btn btn-primary" style="display:none">+ Создать</button>
         </div>
       </div>
-
+      <div id="statusMsg" class="empty-state" style="display:none"></div>
       <div id="activeTable" class="grid-container"></div>
-
-      <h4 class="section-title">Связанные таблицы (Neighbors)</h4>
-      <div id="neighbors" class="neighbors-grid"></div>
+      <div id="pagination" class="pagination-bar" style="display:none">
+        <button id="btnPrev" class="btn btn-xs">← Назад</button>
+        <span id="pageInfo" class="page-info"></span>
+        <button id="btnNext" class="btn btn-xs">Вперёд →</button>
+      </div>
     </section>
   </main>
 
-  <!-- Модальное окно -->
-  <div id="modalOverlay" class="modal-overlay hidden">
+  <!-- Modal -->
+  <div id="modal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
-        <h3 id="modalTitle">Редактирование</h3>
+        <h3 id="modalTitle"></h3>
         <button class="close-btn" onclick="closeModal()">×</button>
       </div>
-      <div class="modal-body" id="modalFormFields">
-        <!-- Поля генерируются JS -->
-      </div>
+      <div class="modal-body" id="modalBody"></div>
+      <div id="modalError" class="modal-error"></div>
       <div class="modal-footer">
-        <button class="btn btn-success" onclick="mockAction('CREATE')">Создать</button>
-        <button class="btn btn-warning" onclick="mockAction('UPDATE')">Обновить</button>
-        <button class="btn btn-danger" onclick="mockAction('DELETE')">Удалить</button>
+        <button class="btn" onclick="closeModal()">Отмена</button>
+        <button class="btn btn-primary" id="modalSave" onclick="doModalSave()">Сохранить</button>
       </div>
     </div>
   </div>

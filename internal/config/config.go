@@ -22,7 +22,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		DBHost:         getenv("DB_HOST", "localhost"),
 		DBPort:         getenv("DB_PORT", "5432"),
-		DBName:         getenv("DB_NAME", "secure_db"),
+		DBName:         getenv("DB_NAME", "security_db"),
 		SuperuserUser:  getenv("DB_SUPERUSER", "postgres"),
 		SuperuserPass:  mustenv("DB_SUPERUSER_PASSWORD"),
 		JWTSecret:      mustenv("JWT_SECRET"),

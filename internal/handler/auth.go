@@ -39,3 +39,11 @@ func (h *Handlers) Logout(c echo.Context) error {
 	h.auth.Logout(ctx, sess.UserID)
 	return c.NoContent(http.StatusNoContent)
 }
+
+func (h *Handlers) Me(c echo.Context) error {
+	sess := middleware.SessionFromCtx(c.Request().Context())
+	return c.JSON(http.StatusOK, map[string]any{
+		"username": sess.Username,
+		"db_role":  sess.DBRole,
+	})
+}

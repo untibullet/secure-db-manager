@@ -33,6 +33,11 @@ func (m *MockAdminRoleRepo) RevokeGroupRole(ctx context.Context, username, dbRol
 	return m.Called(ctx, username, dbRoleName).Error(0)
 }
 
+func (m *MockAdminRoleRepo) ListAvailableRoles(ctx context.Context) ([]domain.Role, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]domain.Role), args.Error(1)
+}
+
 func (m *MockAdminRoleRepo) SetPasswordAndHash(ctx context.Context, userID int, username, bcryptHash, plainPassword string) error {
 	return m.Called(ctx, userID, username, bcryptHash, plainPassword).Error(0)
 }
@@ -75,6 +80,7 @@ func (m *MockAdminAppRepo) AdminListAuditLog(ctx context.Context, filter domain.
 	args := m.Called(ctx, filter, paging)
 	return args.Get(0).([]domain.AuditEntry), args.Error(1)
 }
+
 
 var (
 	errInsertRole = errors.New("AdminInsertUserRole failed")

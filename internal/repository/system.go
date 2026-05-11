@@ -98,6 +98,24 @@ func (s *RoleRepository) SetPasswordAndHash(ctx context.Context, userID int, use
 	return tx.Commit(ctx)
 }
 
+// ListAvailableRoles возвращает все бизнес-роли из таблицы roles через суперпользовательский пул.
+func (s *RoleRepository) ListAvailableRoles(ctx context.Context) ([]domain.Role, error) {
+	rows, err := s.pool.Query(ctx, `SELECT role_id, code, name FROM roles ORDER BY role_id`)
+	if err != nil {
+		return nil, fmt.Errorf("ListAvailableRoles: %w", err)
+	}
+	defer rows.Close()
+	var roles []domain.Role
+	for rows.Next() {
+		var r domain.Role
+		if err := rows.Scan(&r.ID, &r.Code, &r.Name); err != nil {
+			return nil, fmt.Errorf("ListAvailableRoles: %w", err)
+		}
+		roles = append(roles, r)
+	}
+	return roles, rows.Err()
+}
+
 // GetUserForLogin возвращает данные, необходимые для аутентификации (AD-11).
 // Выполняется через суперпользовательский пул — единственный способ прочитать password_hash.
 func (s *RoleRepository) GetUserForLogin(ctx context.Context, username string) (*domain.UserAuth, error) {
