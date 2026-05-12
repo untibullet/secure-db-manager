@@ -16,6 +16,7 @@ import (
 	"github.com/untibullet/secure-db-manager/internal/handler"
 	appmw "github.com/untibullet/secure-db-manager/internal/middleware"
 	"github.com/untibullet/secure-db-manager/internal/repository"
+	"github.com/untibullet/secure-db-manager/internal/seclog"
 	"github.com/untibullet/secure-db-manager/internal/service"
 	"github.com/untibullet/secure-db-manager/internal/session"
 )
@@ -45,8 +46,15 @@ func main() {
 	store := session.NewStore()
 	store.StartReaper(ctx, cfg.ReaperInterval)
 
+	sl, err := seclog.New(cfg.SeclogPath)
+	if err != nil {
+		log.Error("seclog init", "err", err)
+		os.Exit(1)
+	}
+	defer sl.Close()
+
 	// Сервисы.
-	authSvc := service.NewAuthService(store, cfg)
+	authSvc := service.NewAuthService(store, cfg, sl)
 	adminSvc := service.NewAdminService(roleRepo)
 
 	h := handler.New(
@@ -61,11 +69,12 @@ func main() {
 		adminSvc,
 		roleRepo,
 		cfg.SessionTTL,
+		sl,
 	)
 
 	e := echo.New()
 	e.HideBanner = true
-	e.HTTPErrorHandler = handler.ErrorHandler
+	e.HTTPErrorHandler = h.ErrorHandler
 
 	e.Use(appmw.RequestLogger(log))
 	e.Use(echomw.Recover())
@@ -74,7 +83,7 @@ func main() {
 	e.GET("/", func(c echo.Context) error { return c.File("web/templates/index.html") })
 	e.GET("/login", func(c echo.Context) error { return c.File("web/templates/login.html") })
 
-	authMW := appmw.Auth(cfg.JWTSecret, store)
+	authMW := appmw.Auth(cfg.JWTSecret, store, sl)
 	h.Register(e, authMW)
 
 	// SPA fallback: любой GET без совпадения с API-маршрутом отдаёт index.html,

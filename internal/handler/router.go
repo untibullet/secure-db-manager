@@ -10,6 +10,7 @@ import (
 	"github.com/untibullet/secure-db-manager/internal/domain"
 	"github.com/untibullet/secure-db-manager/internal/middleware"
 	"github.com/untibullet/secure-db-manager/internal/repository"
+	"github.com/untibullet/secure-db-manager/internal/seclog"
 	"github.com/untibullet/secure-db-manager/internal/service"
 )
 
@@ -25,6 +26,7 @@ type Handlers struct {
 	admin      *service.AdminService
 	roleRepo   *repository.RoleRepository
 	sessionTTL time.Duration
+	seclog     *seclog.SecurityLogger
 }
 
 func New(
@@ -39,12 +41,13 @@ func New(
 	admin *service.AdminService,
 	roleRepo *repository.RoleRepository,
 	sessionTTL time.Duration,
+	sl *seclog.SecurityLogger,
 ) *Handlers {
 	return &Handlers{
 		auth: auth, plans: plans, cases: cases, runs: runs,
 		results: results, autotests: autotests, reference: reference,
 		stats: stats, admin: admin, roleRepo: roleRepo,
-		sessionTTL: sessionTTL,
+		sessionTTL: sessionTTL, seclog: sl,
 	}
 }
 
@@ -123,13 +126,27 @@ func (h *Handlers) Register(e *echo.Echo, authMW echo.MiddlewareFunc) {
 }
 
 // ErrorHandler — кастомный обработчик ошибок echo.
-// Устанавливается через e.HTTPErrorHandler = handler.ErrorHandler.
-func ErrorHandler(err error, c echo.Context) {
+// Устанавливается через e.HTTPErrorHandler = h.ErrorHandler.
+func (h *Handlers) ErrorHandler(err error, c echo.Context) {
 	if c.Response().Committed {
 		return
 	}
 	var he *echo.HTTPError
 	if errors.As(err, &he) {
+		if he.Code == http.StatusForbidden {
+			sess := middleware.SessionFromCtx(c.Request().Context())
+			ev := seclog.SecurityEvent{
+				EventType: "permission.denied",
+				ClientIP:  c.RealIP(),
+				Path:      c.Request().URL.Path,
+			}
+			if sess != nil {
+				ev.UserID = sess.UserID
+				ev.Username = sess.Username
+				ev.DBRole = sess.DBRole
+			}
+			h.seclog.Write(ev)
+		}
 		msg, _ := he.Message.(string)
 		if msg == "" {
 			msg = http.StatusText(he.Code)

@@ -14,6 +14,7 @@ import (
 	"github.com/untibullet/secure-db-manager/internal/config"
 	"github.com/untibullet/secure-db-manager/internal/domain"
 	"github.com/untibullet/secure-db-manager/internal/repository"
+	"github.com/untibullet/secure-db-manager/internal/seclog"
 	"github.com/untibullet/secure-db-manager/internal/service"
 	"github.com/untibullet/secure-db-manager/internal/session"
 )
@@ -35,7 +36,7 @@ func testConfig() *config.Config {
 // and stores an active session (AD-11).
 func TestAuth_Login_Success(t *testing.T) {
 	store := session.NewStore()
-	svc := service.NewAuthService(store, testConfig())
+	svc := service.NewAuthService(store, testConfig(), seclog.Noop())
 	roleRepo := repository.NewRoleRepository(sysPool)
 
 	token, err := svc.Login(context.Background(), roleRepo, "tester_a", "testerapass")
@@ -53,7 +54,7 @@ func TestAuth_Login_Success(t *testing.T) {
 // without opening a PG connection (AD-11).
 func TestAuth_Login_WrongPassword(t *testing.T) {
 	store := session.NewStore()
-	svc := service.NewAuthService(store, testConfig())
+	svc := service.NewAuthService(store, testConfig(), seclog.Noop())
 	roleRepo := repository.NewRoleRepository(sysPool)
 
 	_, err := svc.Login(context.Background(), roleRepo, "tester_a", "wrongpassword")
@@ -93,7 +94,7 @@ func TestAuth_Login_PGRoleDeleted(t *testing.T) {
 	require.NoError(t, err)
 
 	store := session.NewStore()
-	svc := service.NewAuthService(store, testConfig())
+	svc := service.NewAuthService(store, testConfig(), seclog.Noop())
 	roleRepo := repository.NewRoleRepository(sysPool)
 
 	_, err = svc.Login(ctx, roleRepo, "tmp_no_pg_role", "tmppass")
@@ -105,7 +106,7 @@ func TestAuth_Login_PGRoleDeleted(t *testing.T) {
 func TestAuth_Login_ReplacesSession(t *testing.T) {
 	ctx := context.Background()
 	store := session.NewStore()
-	svc := service.NewAuthService(store, testConfig())
+	svc := service.NewAuthService(store, testConfig(), seclog.Noop())
 	roleRepo := repository.NewRoleRepository(sysPool)
 
 	_, err := svc.Login(ctx, roleRepo, "tester_b", "testerbpass")

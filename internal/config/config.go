@@ -16,6 +16,7 @@ type Config struct {
 	ServerAddr     string
 	SessionTTL     time.Duration
 	ReaperInterval time.Duration
+	SeclogPath     string
 }
 
 func Load() (*Config, error) {
@@ -29,6 +30,7 @@ func Load() (*Config, error) {
 		ServerAddr:     getenv("SERVER_ADDR", ":8080"),
 		SessionTTL:     parseDuration(getenv("SESSION_TTL", "8h")),
 		ReaperInterval: parseDuration(getenv("REAPER_INTERVAL", "5m")),
+		SeclogPath:     getenv("SECLOG_PATH", "/logs/security-events.jsonl"),
 	}
 
 	if cfg.SuperuserPass == "" {

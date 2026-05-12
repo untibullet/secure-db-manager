@@ -11,6 +11,7 @@ import (
 
 	"github.com/untibullet/secure-db-manager/internal/config"
 	"github.com/untibullet/secure-db-manager/internal/domain"
+	"github.com/untibullet/secure-db-manager/internal/seclog"
 	"github.com/untibullet/secure-db-manager/internal/service"
 	"github.com/untibullet/secure-db-manager/internal/session"
 )
@@ -47,6 +48,7 @@ func newTestAuthService() *service.AuthService {
 			JWTSecret:  "test-secret",
 			SessionTTL: time.Hour,
 		},
+		seclog.Noop(),
 	)
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo/v4"
 	appjwt "github.com/untibullet/secure-db-manager/internal/jwt"
 	"github.com/untibullet/secure-db-manager/internal/logger"
+	"github.com/untibullet/secure-db-manager/internal/seclog"
 	"github.com/untibullet/secure-db-manager/internal/session"
 )
 
@@ -16,27 +17,36 @@ type sessionKey struct{}
 
 // Auth валидирует JWT из заголовка Authorization, извлекает сессию из store
 // и кладёт *pgx.Conn в контекст запроса (AD-8).
-func Auth(secret string, store *session.Store) echo.MiddlewareFunc {
+func Auth(secret string, store *session.Store, sl *seclog.SecurityLogger) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			writeUnauthorized := func() error {
+				sl.Write(seclog.SecurityEvent{
+					EventType: "auth.unauthorized",
+					ClientIP:  c.RealIP(),
+					Path:      c.Request().URL.Path,
+				})
+				return echo.NewHTTPError(http.StatusUnauthorized)
+			}
+
 			header := c.Request().Header.Get("Authorization")
 			if !strings.HasPrefix(header, "Bearer ") {
-				return echo.NewHTTPError(http.StatusUnauthorized)
+				return writeUnauthorized()
 			}
 
 			claims, err := appjwt.Parse(strings.TrimPrefix(header, "Bearer "), secret)
 			if err != nil {
-				return echo.NewHTTPError(http.StatusUnauthorized)
+				return writeUnauthorized()
 			}
 
 			userID, err := claims.UserID()
 			if err != nil {
-				return echo.NewHTTPError(http.StatusUnauthorized)
+				return writeUnauthorized()
 			}
 
 			sess, ok := store.Get(userID)
 			if !ok {
-				return echo.NewHTTPError(http.StatusUnauthorized)
+				return writeUnauthorized()
 			}
 
 			ctx := c.Request().Context()

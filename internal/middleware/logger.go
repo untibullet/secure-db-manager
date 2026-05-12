@@ -8,6 +8,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	applogger "github.com/untibullet/secure-db-manager/internal/logger"
+	"github.com/untibullet/secure-db-manager/internal/seclog"
 )
 
 // RequestLogger обогащает контекст каждого запроса логгером с полями request_id, method, path (AD-14).
@@ -26,6 +27,7 @@ func RequestLogger(base *slog.Logger) echo.MiddlewareFunc {
 				"path", req.URL.Path,
 			)
 			ctx := applogger.WithLogger(req.Context(), l)
+			ctx = seclog.WithClientIP(ctx, c.RealIP())
 			c.SetRequest(req.WithContext(ctx))
 
 			start := time.Now()

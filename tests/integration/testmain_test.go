@@ -26,6 +26,7 @@ import (
 	"github.com/untibullet/secure-db-manager/internal/handler"
 	appmw "github.com/untibullet/secure-db-manager/internal/middleware"
 	"github.com/untibullet/secure-db-manager/internal/repository"
+	"github.com/untibullet/secure-db-manager/internal/seclog"
 	"github.com/untibullet/secure-db-manager/internal/service"
 	"github.com/untibullet/secure-db-manager/internal/session"
 )
@@ -168,7 +169,7 @@ func setupTestServer() (*httptest.Server, error) {
 	}
 	roleRepo := repository.NewRoleRepository(sysPool)
 	h := handler.New(
-		service.NewAuthService(testStore, cfg),
+		service.NewAuthService(testStore, cfg, seclog.Noop()),
 		&service.TestPlanService{},
 		&service.TestCaseService{},
 		&service.RunService{},
@@ -179,11 +180,12 @@ func setupTestServer() (*httptest.Server, error) {
 		service.NewAdminService(roleRepo),
 		roleRepo,
 		cfg.SessionTTL,
+		seclog.Noop(),
 	)
 	e := echo.New()
 	e.HideBanner = true
 	e.HTTPErrorHandler = handler.ErrorHandler
-	h.Register(e, appmw.Auth(cfg.JWTSecret, testStore))
+	h.Register(e, appmw.Auth(cfg.JWTSecret, testStore, seclog.Noop()))
 	return httptest.NewServer(e), nil
 }
 

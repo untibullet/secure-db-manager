@@ -36,7 +36,7 @@ func (h *Handlers) Login(c echo.Context) error {
 func (h *Handlers) Logout(c echo.Context) error {
 	ctx := c.Request().Context()
 	sess := middleware.SessionFromCtx(ctx)
-	h.auth.Logout(ctx, sess.UserID)
+	h.auth.Logout(ctx, sess.UserID, sess.Username)
 	return c.NoContent(http.StatusNoContent)
 }
 
